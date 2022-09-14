@@ -29,7 +29,7 @@
         "!json"
     ],
     "python.languageServer": "Pylance",
-    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.typeCheckingMode": "off",
     "search.useGlobalIgnoreFiles": true,
     "files.watcherExclude": {
         "typings/**": true,

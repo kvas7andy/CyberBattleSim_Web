@@ -8,7 +8,7 @@
             "name": "Python: cyberbattle_gym",
             "type": "python",
             "request": "launch",
-            "program": "src/cyberbattle_gym/samples/run.py",
+            "program": "scripts/run.py",
             "console": "integratedTerminal"
         },
         {
