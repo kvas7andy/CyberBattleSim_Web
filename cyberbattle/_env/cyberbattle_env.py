@@ -485,7 +485,8 @@ class CyberBattleEnv(gym.Env):
                 # the 4th component gives the port number
                 #
                 #  The actual credential secret is not returned by the environment.
-                #  To use the credential as a parameter to another action the agent should refer to it by its index # [x] Note it, credentials refered by indexes from predefined exposed external identifier
+                #  To use the credential as a parameter to another action the agent should refer to it by its index # [x] Note it, credentials refered by indexes
+                #                                                                                                   from predefined exposed external identifier
                 #  e.g. (UNUSED_SLOT,_,_,_) encodes an empty slot
                 #       (USED_SLOT,1,56,22) encodes a leaked credential identified by its index 1,
                 #          that was used to authenticat to target node 56 on port number 22 (e.g. SSH)
