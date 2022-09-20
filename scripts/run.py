@@ -20,7 +20,7 @@ def main() -> int:
     handler.setFormatter(formatter)
     root.addHandler(handler)
 
-    env = gym.make('CyberBattleToyCtf-v0')
+    env = gym.make('cyberbattle:CyberBattleToyCtf-v0')
 
     logging.info(env.action_space.sample())
     logging.info(env.observation_space.sample())

@@ -472,7 +472,7 @@ class CyberBattleEnv(gym.Env):
             # successuflly moved to the target node (1) or not (0)
             'lateral_move': spaces.Discrete(2),
             # boolean: 1 if customer secret data were discovered, 0 otherwise
-            'customer_data_found': spaces.MultiBinary(2),
+            'customer_data_found': spaces.MultiBinary(2),  # TODO check spaces.MultiBinary(2) output not corresponds to observation's outcome type numpy.int32
             # whether an attempted probing succeeded or not
             'probe_result': spaces.Discrete(3),
             # Esclation result
@@ -480,12 +480,12 @@ class CyberBattleEnv(gym.Env):
             # Array of slots describing credentials that were leaked
             'leaked_credentials': spaces.Tuple(
                 # the 1st component indicates if the slot is used or not (SLOT_USED or SLOT_UNSUED)
-                # the 2nd component gives the credential unique index (external identifier exposed to the agent)
+                # the 2nd component gives the credential unique index (external identifier exposed to the agent) # [x] how agent knows about specific credentials chosen?
                 # the 3rd component gives the target node ID
                 # the 4th component gives the port number
                 #
                 #  The actual credential secret is not returned by the environment.
-                #  To use the credential as a parameter to another action the agent should refer to it by its index
+                #  To use the credential as a parameter to another action the agent should refer to it by its index # [x] Note it, credentials refered by indexes from predefined exposed external identifier
                 #  e.g. (UNUSED_SLOT,_,_,_) encodes an empty slot
                 #       (USED_SLOT,1,56,22) encodes a leaked credential identified by its index 1,
                 #          that was used to authenticat to target node 56 on port number 22 (e.g. SSH)
@@ -834,13 +834,15 @@ class CyberBattleEnv(gym.Env):
 
             obs['newly_discovered_nodes_count'] = numpy.int32(newly_discovered_nodes_count)
 
-            # Encode the returned credentials in the format expected by the gym agent
+            # Encode the returned new credentials in the format expected by the gym agent
             obs['leaked_credentials'] = tuple(
                 [numpy.array([USED_SLOT,
                               cache_index,
                               self.__find_external_index(cached_credential.node),
                               self.__portname_to_index(cached_credential.port)], numpy.int32)
                  for cache_index, cached_credential in newly_discovered_creds])
+# [x] observations leaked credentials Typle() not maintained with same dimension?!
+# max number credentials per action. Find where Obs is processed for unified inpuut to model.
 
         elif isinstance(outcome, model.LateralMove):
             obs['lateral_move'] = numpy.int32(1)
