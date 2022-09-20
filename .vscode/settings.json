@@ -39,5 +39,6 @@
         "venv/": true
     },
     "jupyter.jupyterServerType": "local",
-    "files.trimFinalNewlines": true
+    "files.trimFinalNewlines": true,
+    "jupyter.kernels.filter": []
 }
