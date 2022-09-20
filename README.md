@@ -1,4 +1,9 @@
-﻿# CyberBattleSim
+﻿# SAP version of CyberBattleSim
+
+Research project on the development of high-fidelity simulator for cloud active defense on application layer.
+
+Source: [microsoft repository](https://github.com/microsoft/CyberBattleSim)
+# CyberBattleSim
 
 > April 8th, 2021: See the [announcement](https://www.microsoft.com/security/blog/2021/04/08/gamifying-machine-learning-for-stronger-security-and-ai-models/) on the Microsoft Security Blog.
 
