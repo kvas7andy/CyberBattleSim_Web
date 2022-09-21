@@ -11,3 +11,12 @@
 [user]
 	email = andrei.kvasov.dl@gmail.com
 	name = Andrei Kvasov
+[remote "origin"]
+        url = git@github.wdf.sap.corp:sundew/CyberBattleSim_sundew.git
+        fetch = +refs/heads/*:refs/remotes/origin/*
+[branch "main"]
+        remote = origin
+        merge = refs/heads/main
+[remote "upstream"]
+        url = https://github.com/microsoft/CyberBattleSim.git
+        fetch = +refs/heads/*:refs/remotes/upstream/*
