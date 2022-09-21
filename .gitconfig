@@ -7,7 +7,7 @@
 [core]
     whitespace = cr-at-eol,-trailing-space
 [credential]
-	helper = "!f() { /root/.vscode-server/bin/e7f30e38c5a4efafeec8ad52861eb772a9ee4dfb/node /tmp/vscode-remote-containers-34fcc9087d7005828d7a4c470f58ffb8c68bb63f.js $*; }; f"
+	helper = "!f() { /root/.vscode-server/bin/74b1f979648cc44d385a2286793c226e611f59e7/node /tmp/vscode-remote-containers-c3b7910b48bdad6346e904f0b66762b568bfa52b.js $*; }; f"
 [user]
 	email = andrei.kvasov.dl@gmail.com
 	name = Andrei Kvasov
