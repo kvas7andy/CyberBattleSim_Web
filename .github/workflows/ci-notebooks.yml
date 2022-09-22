@@ -5,8 +5,6 @@ on:
   push:
     branches:
       - main
-      - wiblum/*
-      - blumu/*
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -34,9 +32,8 @@ jobs:
       - name: Pull pip packages from cache
         uses: actions/cache@v2
         with:
-          key: pip-"${{ runner.os }}"-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements.dev.txt') }}-${{ hashFiles('setup.py') }}
-          restore-keys: pip-"${{ runner.os }}"
-
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements.dev.txt') }}-${{ hashFiles('setup.py') }}
+          restore-keys: pip-${{ runner.os }}
           path: ${{ env.pythonver.pythonLocation }}/lib/python3.8/site-packages
 
       - name: Pull typing stubs from cache
@@ -49,16 +46,16 @@ jobs:
       - name: Initialize build environment
         run: TERM=dumb && ./init.sh -n
 
-      - name: Lint [flake8]
+      - name: Papermill notebooks
         run: |
-          pip install flake8
-          flake8 --benchmark
+          jupyter kernelspec list
+          cd notebooks
+          bash run_all.sh python3
 
-      - name: Typecheck [pyright]
-        run: ./pyright.sh
-
-      - name: Test [pytest]
-        run: |
-          pip install six pexpect wcwidth
-          pip install pytest-azurepipelines
-          python -m pytest -v cyberbattle
+      - name: Archive milled notebooks
+        uses: actions/upload-artifact@v3
+        with:
+          name: papermilled-notebooks
+          path: |
+            notebooks/output/*.ipynb
+            !dist/**/*.md

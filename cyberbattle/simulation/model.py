@@ -27,10 +27,10 @@ formally defined by:
 from datetime import datetime, time
 from typing import NamedTuple, List, Dict, Optional, Union, Tuple, Iterator
 import dataclasses
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import matplotlib.pyplot as plt  # type:ignore
 from enum import Enum, IntEnum
-import boolean
+from boolean import boolean
 import networkx as nx
 import yaml
 import random
@@ -249,7 +249,8 @@ class RulePermission(Enum):
     BLOCK = 1
 
 
-class FirewallRule(NamedTuple):
+@dataclass(frozen=True)
+class FirewallRule:
     """A firewall rule"""
     # A port name
     port: PortName
@@ -259,7 +260,8 @@ class FirewallRule(NamedTuple):
     reason: str = ""
 
 
-class FirewallConfiguration(NamedTuple):
+@dataclass
+class FirewallConfiguration:
     """Firewall configuration on a given node.
     Determine if traffic should be allowed or specifically blocked
     on a given port for outgoing and incoming traffic.
@@ -270,16 +272,16 @@ class FirewallConfiguration(NamedTuple):
     are assumed to be blocked. (Adding an explicit block rule
     can still be useful to give a reason for the block.)
     """
-    outgoing: List[FirewallRule] = [
+    outgoing: List[FirewallRule] = field(repr=True, default_factory=lambda: [
         FirewallRule("RDP", RulePermission.ALLOW),
         FirewallRule("SSH", RulePermission.ALLOW),
         FirewallRule("HTTPS", RulePermission.ALLOW),
-        FirewallRule("HTTP", RulePermission.ALLOW)]
-    incoming: List[FirewallRule] = [
+        FirewallRule("HTTP", RulePermission.ALLOW)])
+    incoming: List[FirewallRule] = field(repr=True, default_factory=lambda: [
         FirewallRule("RDP", RulePermission.ALLOW),
         FirewallRule("SSH", RulePermission.ALLOW),
         FirewallRule("HTTPS", RulePermission.ALLOW),
-        FirewallRule("HTTP", RulePermission.ALLOW)]
+        FirewallRule("HTTP", RulePermission.ALLOW)])
 
 
 class MachineStatus(Enum):
@@ -343,7 +345,13 @@ def iterate_network_nodes(network: nx.graph.Graph) -> Iterator[Tuple[NodeID, Nod
         yield nodeid, node_data
 
 
-class Environment(NamedTuple):
+# NOTE: Using `NameTuple` instead of `dataclass` breaks deserialization
+# with PyYaml 2.8.1 due to a new recrusive references to the networkx graph in the field
+#   edges: !!python/object:networkx.classes.reportviews.EdgeView
+#     _adjdict: *id018
+#     _graph: *id019
+@dataclass
+class Environment:
     """ The static graph defining the network of computers """
     network: nx.DiGraph
     vulnerability_library: VulnerabilityLibrary
@@ -559,7 +567,6 @@ def assign_random_labels(
 def setup_yaml_serializer() -> None:
     """Setup a clean YAML formatter for object of type Environment.
     """
-
     yaml.add_representer(Precondition,
                          lambda dumper, data: dumper.represent_scalar('!BooleanExpression',
                                                                       str(data.expression)))  # type: ignore
