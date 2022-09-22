@@ -10,7 +10,7 @@
         "cyberbattle/agents/__init__.py"
     ],
     "reportMissingImports": true,
-    "reportMissingTypeStubs": true,
+    "reportMissingTypeStubs": false,
     "enableTypeIgnoreComments": true,
     "reportUnusedFunction": "warning",
     "reportUnusedImport": "warning",
