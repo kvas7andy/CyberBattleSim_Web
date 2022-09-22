@@ -7,7 +7,13 @@
 [core]
     whitespace = cr-at-eol,-trailing-space
 [credential]
-	helper = "!f() { /root/.vscode-server/bin/e7f30e38c5a4efafeec8ad52861eb772a9ee4dfb/node /tmp/vscode-remote-containers-34fcc9087d7005828d7a4c470f58ffb8c68bb63f.js $*; }; f"
+	helper = "!f() { /root/.vscode-server/bin/74b1f979648cc44d385a2286793c226e611f59e7/node /tmp/vscode-remote-containers-f064ad33e8df5241c1b1a26ae2bc929c14ca9d9f.js $*; }; f"
 [user]
 	email = andrei.kvasov.dl@gmail.com
 	name = Andrei Kvasov
+[branch "main"]
+        remote = origin
+        merge = refs/heads/main
+[remote "upstream"]
+        url = https://github.com/microsoft/CyberBattleSim.git
+        fetch = +refs/heads/*:refs/remotes/upstream/*
