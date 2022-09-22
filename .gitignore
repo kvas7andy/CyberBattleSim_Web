@@ -61,3 +61,4 @@ log.txt
 
 notebooks/output/**
 .gitconfig
+notebooks/images/**
