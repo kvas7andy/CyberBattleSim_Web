@@ -7,9 +7,9 @@ import matplotlib.pyplot as plt  # type:ignore
 import numpy as np
 
 
-def new_plot(title):
+def new_plot(title, **kwargs):
     """Prepare a new plot of cumulative rewards"""
-    plt.figure(figsize=(10, 8))
+    plt.figure(figsize=kwargs.get("figsize", (10, 8)))
     plt.ylabel('cumulative reward', fontsize=20)
     plt.xlabel('step', fontsize=20)
     plt.xticks(size=20)
@@ -92,9 +92,9 @@ def plot_all_episodes(r):
     plt.show()
 
 
-def plot_averaged_cummulative_rewards(title, all_runs):
+def plot_averaged_cummulative_rewards(title, all_runs, **kwargs):
     """Plot averaged cumulative rewards"""
-    new_plot(title)
+    new_plot(title, **kwargs)
     for r in all_runs:
         plot_episodes_rewards_averaged(r)
     plt.legend(loc="lower right")
