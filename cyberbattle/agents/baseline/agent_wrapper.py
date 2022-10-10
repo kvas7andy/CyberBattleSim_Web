@@ -352,7 +352,7 @@ class AbstractAction(Feature):
         """Specialize an abstract "q"-action into a gym action.
         Return an adjustement weight (1.0 if the choice was deterministic, 1/n if a choice was made out of n)
         and the gym action"""
-
+        # abstract_action_index == CONNECT
         abstract_action_index_int = int(abstract_action_index)
 
         node_prop = np.array(observation['discovered_nodes_properties'])
@@ -361,6 +361,7 @@ class AbstractAction(Feature):
             vuln = abstract_action_index_int
             return {'local_vulnerability': np.array([source_node, vuln])}
 
+        # abstract_action_index == REMOTE
         abstract_action_index_int -= self.n_local_actions
         if abstract_action_index_int < self.n_remote_actions:
             vuln = abstract_action_index_int
@@ -379,6 +380,7 @@ class AbstractAction(Feature):
 
             return {'remote_vulnerability': np.array([source_node, target, vuln])}
 
+        # abstract_action_index == CONNECT
         abstract_action_index_int -= self.n_remote_actions
         port = np.int32(abstract_action_index_int)
 
