@@ -7,11 +7,20 @@ Attack path:    !a! action of out interest          !o! outcome of our interest 
 Penalty: cost=100 deception, cost=50 penalty for touching, cost=0.0 loop problem (so better not use), cost=1.0 usual shortening of path, value=50 uncertainty in value, value=100 value
 
 
-HERE TinyToy exmaple attackpath:
+BEFORE TinyToy exmaple attackpath:
 "client"//Local//SearchEdgeHistory => discovered LeakedNodesId Website
-"Website"//Remote//ScanPageSource => discovered LeakedNodesId
-gdsfgdgfd
+"client" + "Website"//Remote//ScanPageSource => discovered LeakedNodesId Website.Directory
+"client" + "Website.Derectory"//REMOTE//NavigateWebDirectoryFurther => LeakedCredentials for connecting and owning Website with MySQL l:103
+Connect from "client" to  "Website" through SSH (Firewall allowed) using MySQL credentials (port MySQL) => Reward 1000 => FLAG taken
 
+
+REMAPPING:
+"client" xxx
+"Website" == "/"
+"Website.Directory" == "/v2/messages"
+
+
+AFTER TinyMicro
 1. Passive recon
 - attacker visits '/'
 !a! view source of page (html)
@@ -65,62 +74,130 @@ default_allow_rules = [
 # Network nodes involved in the Capture the flag game
 nodes = {
     "GET /": m.NodeInfo(
-        services=[
-            m.ListeningService("SSH", allowedCredentials=[
-                "ReusedMySqlCred-web"])],
-        firewall=m.FirewallConfiguration(incoming=default_allow_rules,
-                                         outgoing=default_allow_rules + [
-                                             m.FirewallRule("su", m.RulePermission.ALLOW),
-                                             m.FirewallRule("sudo", m.RulePermission.ALLOW)]),
-        value=1000,
-        properties=["MySql", "Ubuntu", "nginx/1.10.3"],
+        services=[],
+        # m.ListeningService("SSH", allowedCredentials=[
+        #    "ReusedMySqlCred-web"])],
+        # firewall=m.FirewallConfiguration(incoming=default_allow_rules,
+        #                                 outgoing=default_allow_rules + [
+        #                                     m.FirewallRule("su", m.RulePermission.ALLOW),
+        #                                     m.FirewallRule("sudo", m.RulePermission.ALLOW)]),
+        value=50,  # owning reward
+        # properties=["MySql", "Ubuntu", "nginx/1.10.3"],
         owned_string="FLAG: Login using insecure SSH user/password",
         vulnerabilities=dict(
             ScanPageSource=m.VulnerabilityInfo(
-                description="Website page source contains refrence to browseable "
-                            "relative web directory",
-                type=m.VulnerabilityType.REMOTE,
-                outcome=m.LeakedNodesId(["Website.Directory"]),
-                reward_string="Viewing the web page source reveals a URL to a .txt file and directory on the website",
+                description="Website HTML contains information about multiple blocks leading to endpoints "
+                            "AND scripts with other endpoints + variables (tags?)",
+                type=m.VulnerabilityType.LOCAL,
+                outcome=m.LeakedNodesId(["POST /v2/login", "POST /v2/register", "GET /v2/messages", "GET /v2/phonebook"]),
+                # Not OWNED, need to make connect_to_remote with any credentials to make them owned and include all their properties
+                reward_string="Inspect: Viewing the web page source reveals main endpoints",
+                cost=1.0
+            ),
+            agent_installed=True,  # Any discovered endpoint afterwards shoulf be owned IN ORDER TO use LOCAL vulnerabilities without random serach from REMOTES
+            # since REMOTEs always taken from the overall pool of endpoints vulns
+        )),
+
+    # TODO write the outcome as Privilage raising?
+    "POST /v2/login": m.NodeInfo(
+        services=[m.ListeningService("HTTPS")],  # should I leave like this?
+        value=10,  # owning reward
+        vulnerabilities=dict(
+            POSTAsAnyUser=m.VulnerabilityInfo(  # LocalUser == registered user with SESSION token, but without privilages!
+                description="Trap Deceptive endpoint to check",
+                type=m.VulnerabilityType.LOCAL,
+                outcome=m.PrivilegeEscalation(m.PrivilegeLevel.LocalUser),
+                reward_string="Messages available to Local User  (registered by attacker) include username Mario D Files (then interpreted as possible)",
+                cost=1.0
+            ),
+        )),
+
+    # TODO write the outcome as Privilage raising?
+    "POST /v2/register": m.NodeInfo(
+        services=[m.ListeningService("HTTPS")],  # should I leave like this?
+        value=10,  # owning reward
+        vulnerabilities=dict(
+            POSTAsAlicAnon=m.VulnerabilityInfo(  # LocalUser == registered user with SESSION token, but without privilages!
+                description="Trap Deceptive endpoint to check",
+                type=m.VulnerabilityType.LOCAL,
+                outcome=m.LeakedNodesId["/v2/users"],
+                reward_string="Messages available to Local User  (registered by attacker) include username Mario D Files (then interpreted as possible)",
+                cost=1.0
+            ),
+        )),
+
+    "GET /v2/users": m.NodeInfo(
+        services=[m.ListeningService("HTTPS")],  # should I leave like this?
+        value=100,  # owning reward
+        properties=["LisaGWhite", "MarioDFiles"],  # SO WE NEED INCLUDE all usernames into properties
+
+        # TODO we need to get credential details (cachecredential OR global.property??) but depending on paramter
+        vulnerabilities=dict(
+            # Make credentials usage case with Liz
+            GETWithParameters=m.VulnerabilityInfo(  # Liz == with localuser SESSION token, with special privilages!
+                description="Getting Credentials",
+                # TOCHECK maybe REMOTE do not see all properties at once, so precondition will not be set as True at first before with ProbeSucceed() we will include discovered property as Liz
+                type=m.VulnerabilityType.LOCAL,
+                precondition="LisaGWhite",
+                outcome=m.LeakedCredentials(credentials=[
+                    m.CachedCredential(node="/v2", port="FakePortORSeccionTokenORID",  # TODO Credentials Usage
+                                       credential="MarioDFiles")]),
+                # ALREADY credentials? Do I include /v2/users and use found property form /v2/messages?
+                # Then I do not give credentials, but give ProbeSucceeded
+                reward_string="Messages available to Local User  (registered by attacker) include username Mario D Files (then interpreted as possible)",
                 cost=1.0
             ),
         )),
 
     "GET /v2/messages": m.NodeInfo(
-        services=[m.ListeningService("HTTPS")],
-        value=50,
-        properties=["Ubuntu", "nginx/1.10.3",
-                    "CTFFLAG:Readme.txt-Discover secret data"
-                    ],
+        services=[m.ListeningService("HTTPS")],  # should I leave like this?
+        value=40,
+        # properties=["Ubuntu", "nginx/1.10.3",
+        #             "CTFFLAG:Readme.txt-Discover secret data"
+        #             ],
+        properties=["LisaGWhite", "MarioDFiles"],  # SO WE NEED INCLUDE all usernames into properties
         vulnerabilities=dict(
-            NavigateWebDirectoryFurther=m.VulnerabilityInfo(
-                description="Discover MYSQL credentials MySql for user "
-                            "'web' in (getting-started.txt)",
-                type=m.VulnerabilityType.REMOTE,
+            # Make credentials usage case with Liz
+            GETAsLiz=m.VulnerabilityInfo(  # Liz == with localuser SESSION token, with special privilages!
+                description="Getting Credentials",
+                # TOCHECK maybe REMOTE do not see all properties at once, so precondition will not be set as True at first before with ProbeSucceed() we will include discovered property as Liz
+                type=m.VulnerabilityType.LOCAL,
+                precondition="LisaGWhite",
                 outcome=m.LeakedCredentials(credentials=[
-                    m.CachedCredential(node="Website", port="MySQL",
-                                       credential="ReusedMySqlCred-web")]),
-                reward_string="Discover browseable web directory: Navigating to parent URL revealed file `readme.txt`"
-                              "with secret data (aflag); and `getting-started.txt` with MYSQL credentials",
+                    m.CachedCredential(node="/v2", port="FakePortORSeccionTokenORID",  # TODO Credentials Usage
+                                       credential="MarioDFiles")]),
+                # ALREADY credentials? Do I include /v2/users and use found property form /v2/messages?
+                # Then I do not give credentials, but give ProbeSucceeded
+                reward_string="Messages available to Local User  (registered by attacker) include username Mario D Files (then interpreted as possible)",
+                cost=1.0
+            ),
+            # Identify GET usage for anyuser
+            GETAsLocalUser=m.VulnerabilityInfo(  # LocalUser == registered user with SESSION token, but without privilages!
+                description="Found username as (global??) property",
+                type=m.VulnerabilityType.LOCAL,
+                outcome=m.ProbeSucceeded(["MariodFile", "OR global.MarioDFiles ???"]),  # global.MarioDFiles maybe useful if we share the property among endpoints => have global properties? (there is global vuln idea also!!!)
+                reward_string="Messages available to Local User  (registered by attacker) include username Mario D Files (then interpreted as possible)",
                 cost=1.0
             ),
         )),
 
-
-    'client': m.NodeInfo(
-        services=[],
-        properties=["CLIENT:Win10"],
+    "GET /v2/phonebook": m.NodeInfo(
+        services=[m.ListeningService("HTTPS")],  # should I leave like this?
         value=0,
+        # properties=["Ubuntu", "nginx/1.10.3",
+        #             "CTFFLAG:Readme.txt-Discover secret data"
+        #             ],
         vulnerabilities=dict(
-            SearchEdgeHistory=m.VulnerabilityInfo(
-                description="Search web history for list of accessed websites",
+            GETAsAnyUser=m.VulnerabilityInfo(  # LocalUser == registered user with SESSION token, but without privilages!
+                description="Trap Deceptive endpoint to check",
                 type=m.VulnerabilityType.LOCAL,
-                outcome=m.LeakedNodesId(["Website"]),
-                reward_string="Web browser history revealed website URL of interest",
-                cost=1.0
-            )),
-        agent_installed=True,
-        reimagable=False),
+                outcome=None,
+                # ALREADY credentials? Do I include /v2/users and use found property form /v2/messages?
+                # Then I do not give credentials, but give ProbeSucceeded
+                reward_string="Messages available to Local User  (registered by attacker) include username Mario D Files (then interpreted as possible)",
+                cost=100.0  # HIGH cost, no value
+            ),
+        ))
 }
 
 global_vulnerability_library: Dict[VulnerabilityID, VulnerabilityInfo] = dict([])
