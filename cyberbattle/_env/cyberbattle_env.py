@@ -417,6 +417,17 @@ class CyberBattleEnv(gym.Env):
                                     if set to False a negative reward is returned instead.
         """
 
+        self.__node_count = len(initial_environment.network.nodes.items())
+        if maximum_node_count is None:
+            maximum_node_count = self.__node_count
+
+        # maximum number of entities in a given environment
+        self.__bounds = EnvironmentBounds.of_identifiers(
+            maximum_total_credentials=maximum_total_credentials,
+            maximum_node_count=maximum_node_count,
+            maximum_discoverable_credentials_per_action=maximum_discoverable_credentials_per_action,
+            identifiers=initial_environment.identifiers)
+
         self.validate_environment(initial_environment)
         self.__attacker_goal: Optional[AttackerGoal] = attacker_goal
         self.__defender_goal: DefenderGoal = defender_goal
@@ -435,17 +446,6 @@ class CyberBattleEnv(gym.Env):
         self.__defender_agent = defender_agent
 
         self.__reset_environment()
-
-        self.__node_count = len(initial_environment.network.nodes.items())
-        if maximum_node_count is None:
-            maximum_node_count = self.__node_count
-
-        # maximum number of entities in a given environment
-        self.__bounds = EnvironmentBounds.of_identifiers(
-            maximum_total_credentials=maximum_total_credentials,
-            maximum_node_count=maximum_node_count,
-            maximum_discoverable_credentials_per_action=maximum_discoverable_credentials_per_action,
-            identifiers=initial_environment.identifiers)
 
         # The Space object defining the valid actions of an attacker.
         local_vulnerabilities_count = self.__bounds.local_attacks_count
