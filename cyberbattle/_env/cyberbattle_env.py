@@ -387,7 +387,7 @@ class CyberBattleEnv(gym.Env):
     def __init__(self,
                  initial_environment: model.Environment,
                  maximum_total_credentials: int = 1000,
-                 maximum_node_count: int = 100,
+                 maximum_node_count: int = None,
                  maximum_discoverable_credentials_per_action: int = 5,
                  defender_agent: Optional[DefenderAgent] = None,
                  attacker_goal: Optional[AttackerGoal] = AttackerGoal(own_atleast_percent=1.0),
@@ -417,13 +417,6 @@ class CyberBattleEnv(gym.Env):
                                     if set to False a negative reward is returned instead.
         """
 
-        # maximum number of entities in a given environment
-        self.__bounds = EnvironmentBounds.of_identifiers(
-            maximum_total_credentials=maximum_total_credentials,
-            maximum_node_count=maximum_node_count,
-            maximum_discoverable_credentials_per_action=maximum_discoverable_credentials_per_action,
-            identifiers=initial_environment.identifiers)
-
         self.validate_environment(initial_environment)
         self.__attacker_goal: Optional[AttackerGoal] = attacker_goal
         self.__defender_goal: DefenderGoal = defender_goal
@@ -444,6 +437,15 @@ class CyberBattleEnv(gym.Env):
         self.__reset_environment()
 
         self.__node_count = len(initial_environment.network.nodes.items())
+        if maximum_node_count is None:
+            maximum_node_count = self.__node_count
+
+        # maximum number of entities in a given environment
+        self.__bounds = EnvironmentBounds.of_identifiers(
+            maximum_total_credentials=maximum_total_credentials,
+            maximum_node_count=maximum_node_count,
+            maximum_discoverable_credentials_per_action=maximum_discoverable_credentials_per_action,
+            identifiers=initial_environment.identifiers)
 
         # The Space object defining the valid actions of an attacker.
         local_vulnerabilities_count = self.__bounds.local_attacks_count
