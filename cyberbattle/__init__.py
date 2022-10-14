@@ -9,7 +9,7 @@ from . import simulation
 from . import agents
 from ._env.cyberbattle_env import AttackerGoal, DefenderGoal
 from .samples.chainpattern import chainpattern
-from .samples.toyctf import toy_ctf
+from .samples.toyctf import toy_ctf, tinytoy
 from .samples.active_directory import generate_ad
 from .simulation import generate_network, model
 
@@ -55,13 +55,13 @@ if 'CyberBattleTiny-v0' in registry.env_specs:
 
 register(
     id='CyberBattleTiny-v0',
-    cyberbattle_env_identifiers=toy_ctf.ENV_IDENTIFIERS,
+    cyberbattle_env_identifiers=tinytoy.ENV_IDENTIFIERS,
     entry_point='cyberbattle._env.cyberbattle_tiny:CyberBattleTiny',
     kwargs={'defender_agent': None,
             'attacker_goal': AttackerGoal(own_atleast=6),
             'defender_goal': DefenderGoal(eviction=True),
-            'maximum_total_credentials': 10,
-            'maximum_node_count': 10
+            # 'maximum_total_credentials': 10,
+            # 'maximum_node_count': 10
             },
     # max_episode_steps=2600,
 )
