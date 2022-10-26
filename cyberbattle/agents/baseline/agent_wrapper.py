@@ -73,7 +73,7 @@ class Feature_active_node_properties(Feature):
 
         # Remap to get rid of the unknown value (2):
         #   1->1, 0->0, 2->0
-        remapped = np.array(node_prop[node] % 2, dtype=np.int_)
+        remapped = np.array(node_prop[node] % 2, dtype=np.int_)  # TODO new version of feature properties with 2->0.5 (as not sure if property is set or not)
         return remapped
 
 
@@ -105,7 +105,8 @@ class Feature_active_node_id(Feature):
 
 
 class Feature_discovered_nodeproperties_sliding(Feature):
-    """Bitmask indicating node properties seen in last few cache entries"""
+    """Bitmask indicating node properties seen in last few cache entries"""  # Actually, node properties seen in last few discovered nodes (not 'cache entries', as the matrix does not store last seen discovered properties fo any node (stacked as within the order of dicsovery),
+    # but current state of discovered nodes, accross maximum self.window_size discovered nodes)
     window_size = 3
 
     def __init__(self, p: EnvironmentBounds):
@@ -206,7 +207,7 @@ class Feature_discovered_notowned_node_count(Feature):
         discovered = a.observation['discovered_node_count']
         node_props = np.array(a.observation['discovered_nodes_properties'][:discovered])
         # here we assume that a node is owned just if all its properties are known
-        owned = np.count_nonzero(np.all(node_props != 2, axis=1))
+        owned = np.count_nonzero(np.all(node_props != 2, axis=1))  # Maybe take privilegelevel as in Feature_owned_node_count
         diff = discovered - owned
         return [min(diff, self.clip)]
 
@@ -364,7 +365,7 @@ class AbstractAction(Feature):
                                 ) -> Optional[cyberbattle_env.Action]:
         """Specialize an abstract "q"-action into a gym action.
         Return an adjustement weight (1.0 if the choice was deterministic, 1/n if a choice was made out of n)
-        and the gym action"""
+        and the gym action"""  # TOCHECK actually, no weight is returned now
         # abstract_action_index == CONNECT
         abstract_action_index_int = int(abstract_action_index)
 

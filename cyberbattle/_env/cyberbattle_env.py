@@ -794,8 +794,8 @@ class CyberBattleEnv(gym.Env):
             # if the node is owned then we know all its properties
             vector = numpy.full((self.__bounds.property_count), 0, dtype=numpy.int32)
         else:
-            # otherwise we don't know anything about not discovered properties => 0 should be the default value
-            vector = numpy.zeros((self.__bounds.property_count), dtype=numpy.int32)
+            # otherwise we don't know anything about not discovered properties => 2 should be the default value
+            vector = numpy.full((self.__bounds.property_count), 2, dtype=numpy.int32)
 
         vector[properties_indices] = 1
         return vector
