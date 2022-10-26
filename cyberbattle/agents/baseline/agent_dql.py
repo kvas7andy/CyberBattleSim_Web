@@ -445,8 +445,6 @@ class DeepQLearnerPolicy(Learner):
         # if gym_action:
         #     return action_style, gym_action, self.metadata_from_gymaction(wrapped_env, gym_action)
 
-        # Otherwise on exploit learnt Q-function
-
         current_global_state = self.stateaction_model.global_features.get(wrapped_env.state, node=None)
 
         # Gather the features of all the current active actors (i.e. owned nodes)
@@ -485,6 +483,7 @@ class DeepQLearnerPolicy(Learner):
             remaining_expectedq_lookups.pop(remaining_candidate_index)
             remaining_action_lookups.pop(remaining_candidate_index)
 
+        # Otherwise on exploit you explore for Q-function
         return "exploit[undefined]->explore", None, None
 
     def stateaction_as_string(self, action_metadata) -> str:

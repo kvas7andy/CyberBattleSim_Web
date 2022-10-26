@@ -102,7 +102,7 @@ class NodeTrackingInformation:
     last_attack: Dict[Tuple[model.VulnerabilityID, bool], time] = dataclasses.field(default_factory=dict)
     # Last time the node got owned by the attacker agent
     last_owned_at: Optional[time] = None
-    # All node properties discovered so far
+    # All node properties discovered so far (indexes of _environment.identifiers.properties without privilege_tags)
     discovered_properties: Set[int] = dataclasses.field(default_factory=set)
 
 
@@ -221,6 +221,7 @@ class AgentActions:
 
         newly_discovered_properties = len(self._discovered_nodes[node_id].discovered_properties) - before_count
         return newly_discovered_properties
+
 
     def __mark_allnodeproperties_as_discovered(self, node_id: model.NodeID):
         node_info: model.NodeInfo = self._environment.network.nodes[node_id]['data']
@@ -620,17 +621,24 @@ class AgentActions:
         """List all possible attacks from all the nodes currently owned by the attacker"""
         on_owned_nodes: List[Dict[str, object]] = [
             {'id': n['id'],
+             'internal index': i,
              'status': n['status'],
              'properties': self._environment.get_node(n['id']).properties,
+             'discovered node properties': list(map(self._environment.identifiers.properties.__getitem__, self.get_discovered_properties(n['id']))),
              'local_attacks': self.list_local_attacks(n['id']),
-             'remote_attacks': self.list_remote_attacks(n['id'])
+             'remote_attacks': self.list_remote_attacks(n['id']),
+             'gathered_credentials (no restrict to node)': self._gathered_credentials
              }
-            for n in self.list_nodes() if n['status'] == 'owned']
+            for i, n in enumerate(self.list_nodes()) if n['status'] == 'owned']
         on_discovered_nodes: List[Dict[str, object]] = [{'id': n['id'],
+                                                         'internal index': i,
                                                          'status': n['status'],
+                                                         'properties': self._environment.get_node(n['id']).properties,
+                                                         'discovered node properties': list(map(self._environment.identifiers.properties.__getitem__, self.get_discovered_properties(n['id']))),
                                                          'local_attacks': None,
-                                                         'remote_attacks': self.list_remote_attacks(n['id'])}
-                                                        for n in self.list_nodes() if n['status'] != 'owned']
+                                                         'remote_attacks': self.list_remote_attacks(n['id']),
+                                                         'gathered_credentials (no restrict to node)': self._gathered_credentials}
+                                                        for i, n in enumerate(self.list_nodes()) if n['status'] != 'owned']
         return on_owned_nodes + on_discovered_nodes
 
     def print_all_attacks(self) -> None:

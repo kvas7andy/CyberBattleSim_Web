@@ -608,7 +608,7 @@ class CyberBattleEnv(gym.Env):
 
     def __get_blank_action_mask(self) -> ActionMask:
         """Return a blank action mask"""
-        max_node_count = self.bounds.maximum_node_count
+        max_node_count = self.bounds.maximum_node_count # property of self.__bounds
         local_vulnerabilities_count = self.__bounds.local_attacks_count
         remote_vulnerabilities_count = self.__bounds.remote_attacks_count
         port_count = self.__bounds.port_count
@@ -668,6 +668,9 @@ class CyberBattleEnv(gym.Env):
         self.__update_action_mask(bitmask)
         return bitmask
 
+    # def encoding_map(self):
+    #   nodes_mapping = {node_index: self.__internal_node_id_from_external_node_index(node_index) for node_index in self.__discovered_nodes}
+
     def pretty_print_internal_action(self, action: Action) -> str:
         """Pretty print an action with internal node and vulnerability identifiers"""
         assert 1 == len(action.keys())
@@ -683,7 +686,7 @@ class CyberBattleEnv(gym.Env):
         elif "connect" in action:
             source_node, target_node, port_index, credential_cache_index = action["connect"]
             assert credential_cache_index >= 0
-            if credential_cache_index < len(self.__credential_cache):
+            if credential_cache_index >= len(self.__credential_cache):
                 return "connect(invalid)"
             source_node_id = self.__internal_node_id_from_external_node_index(source_node)
             target_node_id = self.__internal_node_id_from_external_node_index(target_node)
@@ -754,8 +757,8 @@ class CyberBattleEnv(gym.Env):
 
             # raw data not actually encoded as a proper gym numeric space
             # (were previously returned in the 'info' dict)
-            _credential_cache=self.__credential_cache,
-            _discovered_nodes=self.__discovered_nodes,
+            _credential_cache=self.__credential_cache.copy(),
+            _discovered_nodes=self.__discovered_nodes.copy(),
             _explored_network=self.__get_explored_network()
         )
 
@@ -899,8 +902,8 @@ class CyberBattleEnv(gym.Env):
         obs['discovered_node_count'] = len(self.__discovered_nodes)
         obs['discovered_nodes_properties'] = self.__get_property_matrix()
         obs['nodes_privilegelevel'] = self.__get_privilegelevel_array()
-        obs['_credential_cache'] = self.__credential_cache
-        obs['_discovered_nodes'] = self.__discovered_nodes
+        obs['_credential_cache'] = self.__credential_cache.copy()
+        obs['_discovered_nodes'] = self.__discovered_nodes.copy()
         obs['_explored_network'] = self.__get_explored_network()
 
         self.__update_action_mask(obs['action_mask'])
