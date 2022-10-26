@@ -60,8 +60,8 @@ register(
     kwargs={'defender_agent': None,
             'attacker_goal': AttackerGoal(own_atleast=6),
             'defender_goal': DefenderGoal(eviction=True),
-            # 'maximum_total_credentials': 10,
-            # 'maximum_node_count': 10
+            'maximum_total_credentials': 5,
+            'maximum_node_count': 3
             },
     # max_episode_steps=2600,
 )
