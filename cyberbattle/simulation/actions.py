@@ -77,6 +77,9 @@ CREDENTIAL_DISCOVERED_REWARD = 3
 # Fixed reward for discovering a new node property
 PROPERTY_DISCOVERED_REWARD = 2
 
+# Fixed reward for discovering a new profile data, full or partial
+PROFILE_DISCOVERED_REWARD = 3
+
 
 class EdgeAnnotation(Enum):
     """Annotation added to the network edges created as the simulation is played"""
@@ -143,6 +146,7 @@ class AgentActions:
         they match the ones supplied.
         """
         node: model.NodeInfo = self._environment.network.nodes[target]['data']
+
         node_flags = node.properties
         expr = vulnerability.precondition.expression
 
@@ -222,6 +226,22 @@ class AgentActions:
         newly_discovered_properties = len(self._discovered_nodes[node_id].discovered_properties) - before_count
         return newly_discovered_properties
 
+    def __mark_nodeproperties_as_discovered_global(self, properties_global: List[PropertyName]):
+        properties_indices = [self._environment.identifiers.properties.index(p)
+                              for p in properties_global
+                              if p not in self.privilege_tags]
+        newly_discovered_properties = 0  # TOCHECK will store the maximum node
+
+        for node_id in self.discovered_nodes():
+            if node_id in self._discovered_nodes:
+                before_count = len(self._discovered_nodes[node_id].discovered_properties)
+                self._discovered_nodes[node_id].discovered_properties = self._discovered_nodes[node_id].discovered_properties.union(properties_indices)
+            else:  # TODO to update newly discovered nodes properties?? Where
+                before_count = 0
+                self._discovered_nodes[node_id] = NodeTrackingInformation(discovered_properties=set(properties_indices))
+
+            newly_discovered_properties = max(newly_discovered_properties, len(self._discovered_nodes[node_id].discovered_properties) - before_count)
+        return newly_discovered_properties
 
     def __mark_allnodeproperties_as_discovered(self, node_id: model.NodeID):
         node_info: model.NodeInfo = self._environment.network.nodes[node_id]['data']
@@ -362,6 +382,17 @@ class AgentActions:
 
             newly_discovered_properties = self.__mark_nodeproperties_as_discovered(node_id, outcome.discovered_properties)
             reward += newly_discovered_properties * PROPERTY_DISCOVERED_REWARD
+
+        elif isinstance(outcome, model.ProbeSucceededGlobal):
+            reward += 10000  # newly_discovered_profiles * PROFILE_DISCOVERED_REWARDpass
+        # TODO implement of ProbeSucceededGlobal
+            # for p in outcome.discovered_properties:
+            #     assert p in self._environment.identifiers.profiles, \
+            #         f'Discovered property {p} must belong to the set of properties associated with the node.'
+            #     # TODO omit assert OR check initial identifiers have this property? Ex. 'LisaGWhite' is in properties for any node in environment
+
+            # newly_discovered_profiles = self.__mark_nodeproperties_as_discovered_global(outcome.discovered_profiles)
+            # reward += newly_discovered_profiles * PROFILE_DISCOVERED_REWARD
 
         if node_id not in self._discovered_nodes:
             self._discovered_nodes[node_id] = NodeTrackingInformation()

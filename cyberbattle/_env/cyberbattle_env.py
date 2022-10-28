@@ -339,7 +339,7 @@ class CyberBattleEnv(gym.Env):
             len(vulnerability.outcome.credentials)
             for _, node_info in environment.nodes()
             for _, vulnerability in node_info.vulnerabilities.items()
-            if isinstance(vulnerability.outcome, model.LeakedCredentials)])
+            if isinstance(vulnerability.outcome, model.LeakedCredentials)], default=0)
 
         if effective_maximum_credentials_per_action > self.__bounds.maximum_discoverable_credentials_per_action:
             raise ValueError(
@@ -608,7 +608,7 @@ class CyberBattleEnv(gym.Env):
 
     def __get_blank_action_mask(self) -> ActionMask:
         """Return a blank action mask"""
-        max_node_count = self.bounds.maximum_node_count # property of self.__bounds
+        max_node_count = self.bounds.maximum_node_count  # property of self.__bounds
         local_vulnerabilities_count = self.__bounds.local_attacks_count
         remote_vulnerabilities_count = self.__bounds.remote_attacks_count
         port_count = self.__bounds.port_count
@@ -649,6 +649,7 @@ class CyberBattleEnv(gym.Env):
                         bitmask["local_vulnerability"][source_index, vulnerability_index] = 1
 
                 # Remote: Any other node discovered so far is a potential remote target
+                # TODO self._actuator._check_prerequisites() OR check  preconditions of vulns, that some are not accessible
                 for target_node_id in self.__discovered_nodes:
                     target_index = self.__find_external_index(target_node_id)
                     bitmask["remote_vulnerability"][source_index,

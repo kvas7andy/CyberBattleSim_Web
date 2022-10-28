@@ -10,6 +10,7 @@ from . import agents
 from ._env.cyberbattle_env import AttackerGoal, DefenderGoal
 from .samples.chainpattern import chainpattern
 from .samples.toyctf import toy_ctf, tinytoy
+from .samples.microservices import tinymicro
 from .samples.active_directory import generate_ad
 from .simulation import generate_network, model
 
@@ -62,6 +63,22 @@ register(
             'defender_goal': DefenderGoal(eviction=True),
             'maximum_total_credentials': 5,
             'maximum_node_count': 3
+            },
+    # max_episode_steps=2600,
+)
+
+if 'CyberBattleTinyMicro-v0' in registry.env_specs:
+    del registry.env_specs['CyberBattleTinyMicro-v0']
+
+register(
+    id='CyberBattleTinyMicro-v0',
+    cyberbattle_env_identifiers=tinymicro.ENV_IDENTIFIERS,
+    entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicro',
+    kwargs={'defender_agent': None,
+            'attacker_goal': AttackerGoal(reward=100, own_atleast=1, own_atleast_percent=0.0),
+            'defender_goal': DefenderGoal(eviction=True),
+            'maximum_total_credentials': 1,
+            'maximum_node_count': 10
             },
     # max_episode_steps=2600,
 )

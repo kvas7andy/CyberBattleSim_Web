@@ -81,6 +81,11 @@ Probability = float
 PropertyName = str
 
 
+# The name of a profile global property indicating the presence of a
+# authentification credentials in form or profile, including username, cookie, roles,
+ProfileName = str
+
+
 class Rates(NamedTuple):
     """Probabilities associated with a given vulnerability"""
     probingDetectionRate: Probability = 0.0
@@ -152,6 +157,13 @@ class ProbeSucceeded(VulnerabilityOutcome):
 
     def __init__(self, discovered_properties: List[PropertyName]):
         self.discovered_properties = discovered_properties
+
+
+class ProbeSucceededGlobal(VulnerabilityOutcome):
+    """Probing succeeded"""
+
+    def __init__(self, discovered_profiles_global: List[ProfileName]):
+        self.discovered_profiles = discovered_profiles_global
 
 
 class ProbeFailed(VulnerabilityOutcome):
@@ -355,6 +367,7 @@ class Environment:
     """ The static graph defining the network of computers """
     network: nx.DiGraph
     vulnerability_library: VulnerabilityLibrary
+    profile_library: List[ProfileName]
     identifiers: Identifiers
     creationTime: datetime = datetime.utcnow()
     lastModified: datetime = datetime.utcnow()
