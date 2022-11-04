@@ -9,7 +9,7 @@ import copy
 import logging
 import networkx
 from networkx import convert_matrix
-from typing import NamedTuple, Optional, Tuple, List, Dict, TypeVar, TypedDict, cast
+from typing import NamedTuple, Optional, Tuple, List, Dict, TypeVar, TypedDict, cast, Set
 
 import numpy
 import gym
@@ -72,6 +72,9 @@ Observation = TypedDict(
         # number of new nodes discovered
         'newly_discovered_nodes_count': numpy.int32,
 
+        # number of new nodes discovered
+        'newly_discovered_profiles_count': numpy.int32,
+
         # whether a lateral move was just performed
         'lateral_move': numpy.int32,
 
@@ -102,6 +105,9 @@ Observation = TypedDict(
         # total nodes discovered so far
         'discovered_node_count': int,
 
+        # total profiles discovered so far
+        'discovered_profiles_count': int,
+
         # Matrix of properties for all the discovered nodes
         'discovered_nodes_properties': Tuple[numpy.ndarray, ...],
 
@@ -130,6 +136,11 @@ Observation = TypedDict(
         # The external node index used by the agent to refer to a node
         # is defined as the index of the node in this array
         '_discovered_nodes': List[model.NodeID],
+
+        # Mapping profile index to internal IDs of all nodes discovered so far.
+        # The external node index used by the agent to refer to a node
+        # is defined as the index of the node in this array
+        '_discovered_profiles': Set[model.Profile],
 
         # The subgraph of nodes discovered so far with annotated edges
         # representing interactions that took place during the simulation. (See
@@ -201,6 +212,7 @@ class EnvironmentBounds(NamedTuple):
     """
     maximum_total_credentials: int
     maximum_node_count: int
+    maximum_profiles_count: int
     maximum_discoverable_credentials_per_action: int
 
     port_count: int
@@ -220,6 +232,7 @@ class EnvironmentBounds(NamedTuple):
         return EnvironmentBounds(
             maximum_total_credentials=maximum_total_credentials,
             maximum_node_count=maximum_node_count,
+            maximum_profiles_count=len(identifiers.porfile_usernames),
             maximum_discoverable_credentials_per_action=maximum_discoverable_credentials_per_action,
             port_count=len(identifiers.ports),
             property_count=len(identifiers.properties),
@@ -294,6 +307,7 @@ class CyberBattleEnv(gym.Env):
     def __reset_environment(self) -> None:
         self.__environment: model.Environment = copy.deepcopy(self.__initial_environment)
         self.__discovered_nodes: List[model.NodeID] = []
+        self.__discovered_profiles: Set[model.Profile] = {}
         self.__owned_nodes_indices_cache: Optional[List[int]] = None
         self.__credential_cache: List[model.CachedCredential] = []
         self.__episode_rewards: List[float] = []
@@ -451,6 +465,7 @@ class CyberBattleEnv(gym.Env):
         local_vulnerabilities_count = self.__bounds.local_attacks_count
         remote_vulnerabilities_count = self.__bounds.remote_attacks_count
         maximum_node_count = self.__bounds.maximum_node_count
+        maximum_profiles_count = self.__bounds.maximum_profiles_count
         property_count = self.__bounds.property_count
         port_count = self.__bounds.port_count
 
@@ -518,6 +533,9 @@ class CyberBattleEnv(gym.Env):
             # total nodes discovered so far
             'discovered_node_count': spaces.Discrete(maximum_node_count),
 
+            # total nodes discovered so far
+            'discovered_profiles_count': spaces.Discrete(maximum_profiles_count),
+
             # Matrix of properties for all the discovered nodes
             # 3 values for each matrix cell: unset (0), set (1), unknown (2)
             'discovered_nodes_properties': spaces.Tuple([spaces.MultiDiscrete([3] * property_count)] * maximum_node_count),
@@ -542,6 +560,9 @@ class CyberBattleEnv(gym.Env):
 
             # internal IDs of nodes discovered so far
             '_discovered_nodes': DummySpace(sample=['node1', 'node0', 'node2']),
+
+            # internal IDs of nodes discovered so far
+            '_discovered_profiles': DummySpace(sample=[model.Profile(username="user")]),
 
             # The subgraph of nodes discovered so far with annotated edges
             # representing interactions that took place during the simulation. (See
@@ -649,7 +670,8 @@ class CyberBattleEnv(gym.Env):
                         bitmask["local_vulnerability"][source_index, vulnerability_index] = 1
 
                 # Remote: Any other node discovered so far is a potential remote target
-                # TODO self._actuator._check_prerequisites() OR check  preconditions of vulns, that some are not accessible
+                # TODO self._actuator._check_profile() OR check  preconditions of vulns, that some are not accessible
+
                 for target_node_id in self.__discovered_nodes:
                     target_index = self.__find_external_index(target_node_id)
                     bitmask["remote_vulnerability"][source_index,
@@ -740,6 +762,7 @@ class CyberBattleEnv(gym.Env):
     def __get_blank_observation(self) -> Observation:
         observation = Observation(
             newly_discovered_nodes_count=numpy.int32(0),
+            newly_discovered_profiles_count=numpy.int32(0),
             leaked_credentials=tuple(
                 [numpy.array([UNUSED_SLOT, 0, 0, 0], dtype=numpy.int32)]
                 * self.__bounds.maximum_discoverable_credentials_per_action),
@@ -751,6 +774,7 @@ class CyberBattleEnv(gym.Env):
             credential_cache_matrix=tuple([numpy.zeros((2))] * self.__bounds.maximum_total_credentials),
             credential_cache_length=0,
             discovered_node_count=len(self.__discovered_nodes),
+            discovered_profiles_count=len(self.__discovered_profiles),
             discovered_nodes_properties=tuple(
                 [numpy.full((self.__bounds.property_count,), 2, dtype=numpy.int32)] * self.__bounds.maximum_node_count),
 
@@ -760,6 +784,7 @@ class CyberBattleEnv(gym.Env):
             # (were previously returned in the 'info' dict)
             _credential_cache=self.__credential_cache.copy(),
             _discovered_nodes=self.__discovered_nodes.copy(),
+            _discovered_profiles=self.__discovered_profiles.copy(),
             _explored_network=self.__get_explored_network()
         )
 
@@ -879,6 +904,25 @@ class CyberBattleEnv(gym.Env):
                                   for cache_index, cached_credential in newly_discovered_creds]
 
             obs['leaked_credentials'] = self.__pad_tuple_if_requested(leaked_credentials, 4, self.__bounds.maximum_discoverable_credentials_per_action)
+
+        if isinstance(outcome, model.LeakedProfiles):
+            # update discovered nodes
+            newly_discovered_profiles_count = 0
+            for profile_str in outcome.discovered_profiles:
+                profile_dict = self._actuator._profile_str_to_dict(profile_str)
+                if "username" not in profile_dict.keys():
+                    self.__discovered_profiles.add(model.Profile(profile_dict))
+                    newly_discovered_profiles_count += len(profile_dict)
+                else:
+                    if profile_dict["username"] not in [prof.username for prof in self.__discovered_profiles]:
+                        newly_discovered_profiles_count += len(profile_dict)
+                        self.__discovered_profiles.add(model.Profile(profile_dict))
+                    else:
+                        for profile in self.__discovered_profiles:
+                            if profile_dict["username"] == profile.username:
+                                newly_discovered_profiles_count += profile.update(profile_dict)
+
+            obs['newly_discovered_profiles_count'] = numpy.int32(newly_discovered_profiles_count)
 # [x] observations leaked credentials Typle() not maintained with same dimension?!
 # max number credentials per action. Find where Obs is processed for unified inpuut to model.
 
@@ -901,10 +945,12 @@ class CyberBattleEnv(gym.Env):
         # Dynamic statistics to be refreshed
         obs['credential_cache_length'] = len(self.__credential_cache)
         obs['discovered_node_count'] = len(self.__discovered_nodes)
+        obs['discovered_profile_count'] = len(self.__discovered_profiles)
         obs['discovered_nodes_properties'] = self.__get_property_matrix()
         obs['nodes_privilegelevel'] = self.__get_privilegelevel_array()
         obs['_credential_cache'] = self.__credential_cache.copy()
         obs['_discovered_nodes'] = self.__discovered_nodes.copy()
+        obs['_discovered_profiles'] = self.__discovered_profiles.copy()
         obs['_explored_network'] = self.__get_explored_network()
 
         self.__update_action_mask(obs['action_mask'])

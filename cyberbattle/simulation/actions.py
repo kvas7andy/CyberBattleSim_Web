@@ -15,7 +15,7 @@ from boolean import boolean
 from collections import OrderedDict
 import logging
 from enum import Enum
-from typing import Iterator, List, NamedTuple, Optional, Set, Tuple, Dict, TypedDict, cast
+from typing import Iterator, List, NamedTuple, Optional, Set, Tuple, Dict, TypedDict, cast, get_type_hints
 from IPython.display import display
 import pandas as pd
 
@@ -125,6 +125,7 @@ class AgentActions:
         """
         self._environment = environment
         self._gathered_credentials: Set[model.CredentialID] = set()
+        self._gathered_profiles: Set[model.Profile] = set()
         self._discovered_nodes: "OrderedDict[model.NodeID, NodeTrackingInformation]" = OrderedDict()
         self._throws_on_invalid_actions = throws_on_invalid_actions
 
@@ -140,6 +141,31 @@ class AgentActions:
         for node_id in self._discovered_nodes:
             yield (node_id, self._environment.get_node(node_id))
 
+    def _profile_str_to_dict(profile_str: str) -> dict:
+        profile_dict = {}
+        type_hints = get_type_hints(model.Profile)
+        for property in profile_str.split('&'):
+            key, val = property.split('.')
+            if str(model.RolesType) in str(type_hints[key]):
+                if key in profile_dict.keys() and val not in profile_dict[key]:
+                    profile_dict[key] = profile_dict[key].union({val})
+                else:
+                    profile_dict[key] = {val}
+            else:
+                profile_dict[key] = val
+        return profile_dict
+
+    def _check_profile(self, profile: model.Profile, vulnerability: model.VulnerabilityInfo) -> bool:
+        expr = vulnerability.precondition.expression
+        profile_symbols = ALGEBRA.parse(str(profile)).get_symbols()
+
+        true_value = ALGEBRA.parse('true')
+        false_value = ALGEBRA.parse('false')
+        mapping = {i: true_value if i in profile_symbols or '.' not in str(i) else false_value
+                   for i in expr.get_symbols()}
+        is_true: bool = cast(boolean.Expression, expr.subs(mapping)).simplify() == true_value
+        return is_true
+
     def _check_prerequisites(self, target: model.NodeID, vulnerability: model.VulnerabilityInfo) -> bool:
         """
         This is a quick helper function to check the prerequisites to see if
@@ -150,9 +176,17 @@ class AgentActions:
         node_flags = node.properties
         expr = vulnerability.precondition.expression
 
+        # # TODO check which can be ommitted if switch action was before thus we need to check only CURRENT_PROFILE
+        # for profile in self._gathered_profiles:
+        #     if self._check_profile(profile, vulnerability):
+        #         break
+
+        # if not self._check_profile(profile, vulnerability):
+        #     return False
+
         true_value = ALGEBRA.parse('true')
         false_value = ALGEBRA.parse('false')
-        mapping = {i: true_value if str(i) in node_flags else false_value
+        mapping = {i: true_value if str(i) in node_flags or '.' in str(i) else false_value
                    for i in expr.get_symbols()}
         is_true: bool = cast(boolean.Expression, expr.subs(mapping)).simplify() == true_value
         return is_true
@@ -226,23 +260,6 @@ class AgentActions:
         newly_discovered_properties = len(self._discovered_nodes[node_id].discovered_properties) - before_count
         return newly_discovered_properties
 
-    def __mark_nodeproperties_as_discovered_global(self, properties_global: List[PropertyName]):
-        properties_indices = [self._environment.identifiers.properties.index(p)
-                              for p in properties_global
-                              if p not in self.privilege_tags]
-        newly_discovered_properties = 0  # TOCHECK will store the maximum node
-
-        for node_id in self.discovered_nodes():
-            if node_id in self._discovered_nodes:
-                before_count = len(self._discovered_nodes[node_id].discovered_properties)
-                self._discovered_nodes[node_id].discovered_properties = self._discovered_nodes[node_id].discovered_properties.union(properties_indices)
-            else:  # TODO to update newly discovered nodes properties?? Where
-                before_count = 0
-                self._discovered_nodes[node_id] = NodeTrackingInformation(discovered_properties=set(properties_indices))
-
-            newly_discovered_properties = max(newly_discovered_properties, len(self._discovered_nodes[node_id].discovered_properties) - before_count)
-        return newly_discovered_properties
-
     def __mark_allnodeproperties_as_discovered(self, node_id: model.NodeID):
         node_info: model.NodeInfo = self._environment.network.nodes[node_id]['data']
         return self.__mark_nodeproperties_as_discovered(node_id, node_info.properties)
@@ -276,6 +293,7 @@ class AgentActions:
         newly_discovered_nodes = 0
         newly_discovered_nodes_value = 0
         newly_discovered_credentials = 0
+        newly_discovered_profiles = 0
 
         if isinstance(outcome, model.LeakedCredentials):
             for credential in outcome.credentials:
@@ -298,7 +316,29 @@ class AgentActions:
 
                 self.__annotate_edge(reference_node, node_id, EdgeAnnotation.KNOWS)
 
-        return newly_discovered_nodes, newly_discovered_nodes_value, newly_discovered_credentials
+        elif isinstance(outcome, model.LeakedProfiles):
+            for profile_str in outcome.discovered_profiles:
+                profile_dict = self._profile_str_to_dict(profile_str)
+                if "username" not in profile_dict.keys():
+                    self._gathered_profiles.add(model.Profile(profile_dict))
+                    # profile.update(profile_dict)
+                    newly_discovered_profiles += len(profile_dict)
+                else:
+                    if profile_dict["username"] not in [prof.username for prof in self._gathered_profiles]:
+                        newly_discovered_profiles += len(profile_dict)
+                        self._gathered_profiles.add(model.Profile(profile_dict))
+                    else:
+                        for profile in self._gathered_profiles:
+                            if profile_dict["username"] == profile.username:
+                                newly_discovered_profiles += profile.update(profile_dict)
+                                # for key, value in dataclasses.asdict(profile):
+                                #     if value is None and key in profile_dict.keys():
+                                #         profile
+
+                logger.info('discovered profile: ' + str(profile))
+                # TODO annotate somehow for visibility self.__annotate_edge(reference_node, credential.node, EdgeAnnotation.KNOWS)
+
+        return newly_discovered_nodes, newly_discovered_nodes_value, newly_discovered_credentials, newly_discovered_profiles
 
     def get_node_privilegelevel(self, node_id: model.NodeID) -> model.PrivilegeLevel:
         """Return the last recorded privilege level of the specified node"""
@@ -349,6 +389,12 @@ class AgentActions:
         if vulnerability.type != expected_type:
             raise ValueError(f"vulnerability id '{vulnerability_id}' is for an attack of type {vulnerability.type}, expecting: {expected_type}")
 
+        for profile in self._gathered_profiles:
+            if self._check_profile(profile, vulnerability_id):
+                break
+        if not self._check_profile(profile, vulnerability_id):
+            return ActionResult(reward=Penalty.INVALID_ACTION, outcome=None)
+
         # check vulnerability prerequisites
         if not self._check_prerequisites(node_id, vulnerability):
             return False, ActionResult(reward=failed_penalty, outcome=model.ExploitFailed())
@@ -383,17 +429,6 @@ class AgentActions:
             newly_discovered_properties = self.__mark_nodeproperties_as_discovered(node_id, outcome.discovered_properties)
             reward += newly_discovered_properties * PROPERTY_DISCOVERED_REWARD
 
-        elif isinstance(outcome, model.ProbeSucceededGlobal):
-            reward += 10000  # newly_discovered_profiles * PROFILE_DISCOVERED_REWARDpass
-        # TODO implement of ProbeSucceededGlobal
-            # for p in outcome.discovered_properties:
-            #     assert p in self._environment.identifiers.profiles, \
-            #         f'Discovered property {p} must belong to the set of properties associated with the node.'
-            #     # TODO omit assert OR check initial identifiers have this property? Ex. 'LisaGWhite' is in properties for any node in environment
-
-            # newly_discovered_profiles = self.__mark_nodeproperties_as_discovered_global(outcome.discovered_profiles)
-            # reward += newly_discovered_profiles * PROFILE_DISCOVERED_REWARD
-
         if node_id not in self._discovered_nodes:
             self._discovered_nodes[node_id] = NodeTrackingInformation()
 
@@ -410,12 +445,13 @@ class AgentActions:
 
         self._discovered_nodes[node_id].last_attack[lookup_key] = time()
 
-        newly_discovered_nodes, discovered_nodes_value, newly_discovered_credentials = self.__mark_discovered_entities(node_id, outcome)
+        newly_discovered_nodes, discovered_nodes_value, newly_discovered_credentials, newly_discovered_profiles = self.__mark_discovered_entities(node_id, outcome)
 
         # Note: `discovered_nodes_value` should not be added to the reward
         # unless the discovered nodes got owned, but this case is already covered above
         reward += newly_discovered_nodes * NODE_DISCOVERED_REWARD
         reward += newly_discovered_credentials * CREDENTIAL_DISCOVERED_REWARD
+        reward + newly_discovered_profiles * PROFILE_DISCOVERED_REWARD
 
         reward -= vulnerability.cost
 
@@ -670,7 +706,7 @@ class AgentActions:
                                                          'remote_attacks': self.list_remote_attacks(n['id']),
                                                          'gathered_credentials (no restrict to node)': self._gathered_credentials}
                                                         for i, n in enumerate(self.list_nodes()) if n['status'] != 'owned']
-        return on_owned_nodes + on_discovered_nodes
+        return on_owned_nodes + on_discovered_nodes + [{'discovered profiles': self._gathered_profiles}]
 
     def print_all_attacks(self) -> None:
         """Pretty print list of all possible attacks from all the nodes currently owned by the attacker"""
