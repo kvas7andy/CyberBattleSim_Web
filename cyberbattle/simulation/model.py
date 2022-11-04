@@ -25,7 +25,7 @@ formally defined by:
 """
 
 from datetime import datetime, time
-from typing import NamedTuple, List, Dict, Optional, Union, Tuple, Iterator
+from typing import NamedTuple, List, Dict, Optional, Union, Tuple, Iterator, Set
 import dataclasses
 from dataclasses import dataclass, field
 import matplotlib.pyplot as plt  # type:ignore
@@ -80,10 +80,37 @@ Probability = float
 # service, component, feature or vulnerability on a given node.
 PropertyName = str
 
+RolesType = Set
+
 
 # The name of a profile global property indicating the presence of a
 # authentification credentials in form or profile, including username, cookie, roles,
-ProfileName = str
+@dataclass
+class Profile:
+    # username, after registering
+    username: str = dataclasses.field(default=None, repr=lambda x: '')
+    # set session cookies for username
+    id: str = dataclasses.field(default=None, repr=lambda x: '')
+    # roles
+    roles: Optional[RolesType[str]] = dataclasses.field(default=None, repr=lambda: '')
+    # IP from which vulnerability is feasible to maintain
+    ip: Optional[str] = dataclasses.field(default=None, repr=lambda: '')
+
+    def __str__(self) -> str:
+        return "&".join(filter(None, ("&".join(key + '.' + str(value) for key, value in dataclasses.asdict(self).items() if value is not None and not isinstance(value, RolesType)),
+                        "&".join("&".join(key + '.' + str(value) for value in value_list) for key, value_list in dataclasses.asdict(self).items() if value_list is not None and isinstance(value_list, RolesType)))))
+
+    def update(self, new, diff_mode=False):
+        diff_count = 0
+        for key, value in new.items():
+            if hasattr(self, key):
+                if diff_mode and not getattr(self, key):
+                    diff_count += 1
+                if isinstance(getattr(self, key), RolesType):
+                    setattr(self, key, getattr(self, key) | value)  # getattr(self, key).union(value) if RolesType is Set else
+                else:
+                    setattr(self, key, value)
+        return diff_count
 
 
 class Rates(NamedTuple):
@@ -159,11 +186,11 @@ class ProbeSucceeded(VulnerabilityOutcome):
         self.discovered_properties = discovered_properties
 
 
-class ProbeSucceededGlobal(VulnerabilityOutcome):
+class LeakedProfiles(VulnerabilityOutcome):
     """Probing succeeded"""
 
-    def __init__(self, discovered_profiles_global: List[ProfileName]):
-        self.discovered_profiles = discovered_profiles_global
+    def __init__(self, discovered_profiles: List[Profile]):
+        self.discovered_profiles = discovered_profiles
 
 
 class ProbeFailed(VulnerabilityOutcome):
@@ -348,6 +375,8 @@ class Identifiers(NamedTuple):
     local_vulnerabilities: List[VulnerabilityID] = []
     # Array of all possible remote vulnerabilities names
     remote_vulnerabilities: List[VulnerabilityID] = []
+    # Array of all possible profile names
+    profile_usernames: List[str] = []
 
 
 def iterate_network_nodes(network: nx.graph.Graph) -> Iterator[Tuple[NodeID, NodeInfo]]:
@@ -367,7 +396,6 @@ class Environment:
     """ The static graph defining the network of computers """
     network: nx.DiGraph
     vulnerability_library: VulnerabilityLibrary
-    profile_library: List[ProfileName]
     identifiers: Identifiers
     creationTime: datetime = datetime.utcnow()
     lastModified: datetime = datetime.utcnow()
@@ -458,6 +486,32 @@ def collect_ports_from_nodes(
          for service in node_info.services}))))
 
 
+def collect_profileusernames_from_vuln(vuln: VulnerabilityInfo) -> List[str]:
+    """Returns all the port named referenced in a given vulnerability"""
+    profile_usernames = []
+    # TODO change split('&') to more meaningfull because of precondition, can have other symbols like |
+    if isinstance(vuln.outcome, LeakedProfiles):
+        profile_usernames += [symbol.split('.')[1] for profile_str in vuln.outcome.discovered_profiles for symbol in profile_str.split('&') if 'username.' in symbol]
+    profile_usernames += [symbol.split('.')[1] for symbol in vuln.precondition.expression.get_symbols() if 'username.' in str(symbol)]
+
+
+def collect_profile_usernames_from_nodes(
+        nodes: Iterator[Tuple[NodeID, NodeInfo]],
+        vulnerability_library: VulnerabilityLibrary) -> List[PortName]:
+    """Collect and return all profile usernames used in a given set of nodes
+    and global vulnerability library"""
+    return sorted(list({
+        profile_username
+        for _, v in vulnerability_library.items()
+        for profile_username in collect_profileusernames_from_vuln(v)
+    }.union({
+        profile_username
+        for _, node_info in nodes
+        for _, v in node_info.vulnerabilities.items()
+        for profile_username in collect_profileusernames_from_vuln(v)
+    })))
+
+
 def collect_ports_from_environment(environment: Environment) -> List[PortName]:
     """Collect and return all port names used in a given environment"""
     return collect_ports_from_nodes(environment.nodes(), environment.vulnerability_library)
@@ -473,7 +527,9 @@ def infer_constants_from_nodes(
         local_vulnerabilities=collect_vulnerability_ids_from_nodes_bytype(
             nodes, vulnerabilities, VulnerabilityType.LOCAL),
         remote_vulnerabilities=collect_vulnerability_ids_from_nodes_bytype(
-            nodes, vulnerabilities, VulnerabilityType.REMOTE)
+            nodes, vulnerabilities, VulnerabilityType.REMOTE),
+        profile_usernames=collect_profile_usernames_from_nodes(
+            nodes, vulnerabilities)
     )
 
 

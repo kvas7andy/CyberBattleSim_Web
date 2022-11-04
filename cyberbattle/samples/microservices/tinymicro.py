@@ -60,7 +60,7 @@ AFTER TinyMicro
 
 """
 from cyberbattle.simulation import model as m
-from cyberbattle.simulation.model import NodeID, NodeInfo, VulnerabilityID, VulnerabilityInfo, ProfileName
+from cyberbattle.simulation.model import NodeID, NodeInfo, VulnerabilityID, VulnerabilityInfo, Profile
 from typing import Dict, Iterator, cast, Tuple, List
 
 default_allow_rules = [
@@ -74,12 +74,27 @@ default_allow_rules = [
 ADMINTAG = m.AdminEscalation().tag
 SYSTEMTAG = m.SystemEscalation().tag
 
+# Make credentials usage case with Liz
+# GETWithParameters=m.VulnerabilityInfo(  # Liz == with localuser SESSION token, with special privilages!
+#     description="Getting Credentials",
+#     # TOCHECK maybe REMOTE do not see all properties at once, so precondition will not be set as True at first before with ProbeSucceed() we will include discovered property as Liz
+#     type=m.VulnerabilityType.LOCAL,
+#     precondition="LisaGWhite",
+#     outcome=m.LeakedCredentials(credentials=[
+#         m.CachedCredential(node="/v2", port="FakePortORSeccionTokenORID",  # TODO Credentials Usage
+#                            credential="MarioDFiles")]),
+#     # ALREADY credentials? Do I include /v2/users and use found property form /v2/messages?
+#     # Then I do not give credentials, but give ProbeSucceeded
+#     reward_string="Messages available to Local User  (registered by attacker) include username Mario D Files (then interpreted as possible)",
+#     cost=1.0
+# ),
+
 # Network nodes involved in the Capture the flag game
 nodes = {
     "client_browser": m.NodeInfo(
         services=[],
         value=0,  # owning reward
-        # properties=["cloud"],
+        properties=["script_block"],
         owned_string="Attacker owns his laptop",
         vulnerabilities=dict(
             ScanPageSource=m.VulnerabilityInfo(
@@ -90,27 +105,36 @@ nodes = {
                 # Not OWNED, need to make connect_to_remote with any credentials to make them owned and include all their properties
                 reward_string="Inspect: Viewing the web page source reveals main endpoints",
                 cost=1.0
-            )),
+            ),
+            ScanBlockRegister=m.VulnerabilityInfo(
+                description="Website HTML contains script with rules of username configuration",
+                type=m.VulnerabilityType.LOCAL,
+                precondition=m.Precondition("script_block"),
+                outcome=m.LeakedNodesId(["GET /v2/users"]),
+                # Not OWNED, need to make connect_to_remote with any credentials to make them owned and include all their properties
+                reward_string="Found script with rules to submit with register",
+                cost=1.0
+            )
+        ),
         agent_installed=True,
         # Any discovered endpoint afterwards could be owned IN ORDER TO use LOCAL vulnerabilities without random serach from ALL REMOTES, at each stage
     ),
 
-    # TODO write the outcome as Privilage raising?
     "GET /v2/login": m.NodeInfo(
         services=[m.ListeningService("HTTPS")],
         value=10,  # owning reward
         vulnerabilities=dict(
-            POSTAsAnyUser=m.VulnerabilityInfo(
-                description="Login button endpoint asks for correct credentials",
-                precondition=m.Precondition("fake_user"),  # MEETING 27.10
-                type=m.VulnerabilityType.REMOTE,
-                outcome=m.ProbeSucceededGlobal("fake_user"),
-                reward_string="Discovered endpoints available ",
-                cost=1.0
-            )
+            # TODO switch action of profiles? or If we include password protection, here could be a lot of vulenerabilities because of "weak" security
+            # POSTAsAnyUser=m.VulnerabilityInfo(
+            #     description="Login button endpoint asks for correct credentials",
+            #     precondition=m.Precondition("patient"),  # MEETING 27.10
+            #     type=m.VulnerabilityType.REMOTE,
+            #     outcome=m.LeakedProfiles("patient"),
+            #     reward_string="Discovered endpoints available ",
+            #     cost=1.0
+            # )
         )),
 
-    # TODO write the outcome as Privilage raising?
     "POST /v2/register": m.NodeInfo(
         services=[m.ListeningService("HTTPS")],  # should I leave like this?
         value=10,  # owning reward
@@ -118,8 +142,8 @@ nodes = {
             POSTAsAlicAnon=m.VulnerabilityInfo(  # LocalUser == registered user with SESSION token, but without privilages!
                 description="Trap Deceptive endpoint to check",
                 type=m.VulnerabilityType.REMOTE,
-                outcome=m.ProbeSucceededGlobal("fake_user"),
-                reward_string="Register to fake_user to be able to access more info",
+                outcome=m.LeakedProfiles(["username.patient"]),
+                reward_string="Register to patient to be able to access more info",
                 cost=1.0
             )
         )),
@@ -127,30 +151,17 @@ nodes = {
     "GET /v2/users": m.NodeInfo(
         services=[m.ListeningService("HTTPS")],  # should I leave like this?
         value=100,  # owning reward
-        properties=["LisaGWhite", "MarioDFiles"],  # SO WE NEED INCLUDE all usernames into properties
+        # properties=["LisaGWhite", "MarioDFiles"],  # SO WE NEED INCLUDE all usernames into properties
 
-        # TODO we need to get credential details (cachecredential OR global.property??) but depending on paramter
+        # TODO we need to get credential details (cachecredential OR global.property??) but depending on parameter
         vulnerabilities=dict(
-            # Make credentials usage case with Liz
-            # GETWithParameters=m.VulnerabilityInfo(  # Liz == with localuser SESSION token, with special privilages!
-            #     description="Getting Credentials",
-            #     # TOCHECK maybe REMOTE do not see all properties at once, so precondition will not be set as True at first before with ProbeSucceed() we will include discovered property as Liz
-            #     type=m.VulnerabilityType.LOCAL,
-            #     precondition="LisaGWhite",
-            #     outcome=m.LeakedCredentials(credentials=[
-            #         m.CachedCredential(node="/v2", port="FakePortORSeccionTokenORID",  # TODO Credentials Usage
-            #                            credential="MarioDFiles")]),
-            #     # ALREADY credentials? Do I include /v2/users and use found property form /v2/messages?
-            #     # Then I do not give credentials, but give ProbeSucceeded
-            #     reward_string="Messages available to Local User  (registered by attacker) include username Mario D Files (then interpreted as possible)",
-            #     cost=1.0
-            # ),
             GETWithParametersLisaGWhite=m.VulnerabilityInfo(  # Liz == with localuser SESSION token, with special privilages!
                 description="Getting Credentials",
                 # TOCHECK maybe REMOTE do not see all properties at once, so precondition will not be set as True at first before with ProbeSucceed() we will include discovered property as Liz
                 type=m.VulnerabilityType.REMOTE,
+                precondition=m.Precondition("username.LisaGWhite"),
                 # precondition="LisaGWhite",
-                outcome=m.ProbeSucceededGlobal("MarioD"),
+                outcome=m.LeakedProfiles(["username.LisaGWhite&id.23232323&roles.isDoctor"]),
                 # ALREADY credentials? Do I include /v2/users and use found property form /v2/messages?
                 # Then I do not give credentials, but give ProbeSucceeded
                 reward_string="Globally Available Session ID and username for LisaGWhite",
@@ -161,7 +172,19 @@ nodes = {
                 # TOCHECK maybe REMOTE do not see all properties at once, so precondition will not be set as True at first before with ProbeSucceed() we will include discovered property as Liz
                 type=m.VulnerabilityType.REMOTE,
                 # precondition="MarioDFiles",
-                outcome=m.ProbeSucceededGlobal("LisaGWhite"),
+                outcome=m.LeakedProfiles(["LisaGWhite"]),
+                # ALREADY credentials? Do I include /v2/users and use found property form /v2/messages?
+                # Then I do not give credentials, but give ProbeSucceeded
+                reward_string="Globally Available Session ID and username for LisaGWhite",
+                cost=1.0
+            ),
+            GETAsLocalUser=m.VulnerabilityInfo(
+                description="Getting Credentials",
+                # TOCHECK maybe REMOTE do not see all properties at once, so precondition will not be set as True at first before with ProbeSucceed() we will include discovered property as Liz
+                type=m.VulnerabilityType.REMOTE,
+                precondition=m.Precondition("ip.local"),
+                # precondition="LisaGWhite",
+                outcome=m.LeakedProfiles(["", "", "", "", "username.dsfsfd&roles.isChemist"]),
                 # ALREADY credentials? Do I include /v2/users and use found property form /v2/messages?
                 # Then I do not give credentials, but give ProbeSucceeded
                 reward_string="Globally Available Session ID and username for LisaGWhite",
@@ -181,8 +204,9 @@ nodes = {
             # Identify GET usage for anyuser
             GETAsLocalUser=m.VulnerabilityInfo(  # LocalUser == registered user with SESSION token, but without privilages!
                 description="Found username as (global??) property",
+                precondition=m.Precondition("username.patient"),
                 type=m.VulnerabilityType.REMOTE,
-                outcome=m.ProbeSucceededGlobal(["LisaGWhite"]),  # global.MarioDFiles maybe useful if we share the property among endpoints => have global properties? (there is global vuln idea also!!!)
+                outcome=m.LeakedProfiles(["username.LisaGWhite", "username.JanJCovington", "username.DorisHDunn"]),  # global.MarioDFiles maybe useful if we share the property among endpoints => have global properties? (there is global vuln idea also!!!)
                 reward_string="Messages available to Local User  (registered by attacker) include username Mario D Files (then interpreted as possible)",
                 cost=1.0
             )
@@ -194,7 +218,7 @@ nodes = {
         # properties=["Ubuntu", "nginx/1.10.3",
         #             "CTFFLAG:Readme.txt-Discover secret data"
         #             ],
-        properties=["LisaGWhite", "MarioD"],  # SO WE NEED INCLUDE all usernames into properties
+        # properties=["LisaGWhite", "MarioD"],  # SO WE NEED INCLUDE all usernames into properties
         vulnerabilities=dict(
             # Identify GET usage for anyuser
             GETAsLocalUser=m.VulnerabilityInfo(  # LocalUser == registered user with SESSION token, but without privilages!
@@ -209,8 +233,22 @@ nodes = {
                 description="Getting Credentials",
                 # TOCHECK maybe REMOTE do not see all properties at once, so precondition will not be set as True at first before with ProbeSucceed() we will include discovered property as Liz
                 type=m.VulnerabilityType.REMOTE,
-                precondition=m.Precondition("LisaGWhite"),
-                outcome=m.ProbeSucceededGlobal(["MarioD"]),  # m.LeakedCredentials(credentials=[
+                precondition=m.Precondition("username.LisaGWhite&id.2323232"),
+                outcome=m.ExploitFailed(),  # m.LeakedCredentials(credentials=[
+                #     m.CachedCredential(node="/v2", port="FakePortORSeccionTokenORID",  # TODO Credentials Usage
+                #                        credential="MarioDFiles")]),
+                # ALREADY credentials? Do I include /v2/users and use found property form /v2/messages?
+                # Then I do not give credentials, but give ProbeSucceeded
+                reward_string="Messages available to Local User  (registered by attacker) include username Mario D Files (then interpreted as possible)",
+                cost=1.0
+            ),
+            # Make credentials usage case with Liz
+            GETAsMarioDFiles=m.VulnerabilityInfo(  # Liz == with localuser SESSION token, with special privilages!
+                description="Getting Credentials",
+                # TOCHECK maybe REMOTE do not see all properties at once, so precondition will not be set as True at first before with ProbeSucceed() we will include discovered property as Liz
+                type=m.VulnerabilityType.REMOTE,
+                precondition=m.Precondition("username.MarioDFiles&id.3232323"),
+                outcome=m.LeakedProfiles(["ip.local"]),  # m.LeakedCredentials(credentials=[
                 #     m.CachedCredential(node="/v2", port="FakePortORSeccionTokenORID",  # TODO Credentials Usage
                 #                        credential="MarioDFiles")]),
                 # ALREADY credentials? Do I include /v2/users and use found property form /v2/messages?
@@ -240,7 +278,7 @@ nodes = {
 }
 
 global_vulnerability_library: Dict[VulnerabilityID, VulnerabilityInfo] = dict([])
-global_profiles_library: List[ProfileName] = []  # TODO use global property as separate entity for all usernames possible? maybe use as global credentials list, but include into properties of every node, or
+global_profiles_library: List[Profile] = []  # TODO use global property as separate entity for all usernames possible? maybe use as global credentials list, but include into properties of every node, or
 
 # Environment constants
 ENV_IDENTIFIERS = m.infer_constants_from_nodes(
