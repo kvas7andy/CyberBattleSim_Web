@@ -100,7 +100,7 @@ class Profile:
         return "&".join(filter(None, ("&".join(key + '.' + str(value) for key, value in dataclasses.asdict(self).items() if value is not None and not isinstance(value, RolesType)),
                         "&".join("&".join(key + '.' + str(value) for value in value_list) for key, value_list in dataclasses.asdict(self).items() if value_list is not None and isinstance(value_list, RolesType)))))
 
-    def update(self, new, diff_mode=False):
+    def update(self, new, diff_mode=True):
         diff_count = 0
         for key, value in new.items():
             if hasattr(self, key):
@@ -151,6 +151,9 @@ class LateralMove(VulnerabilityOutcome):
 class CustomerData(VulnerabilityOutcome):
     """Access customer data on target node"""
 
+    def __init__(self, reward: float = 0.0):
+        self.reward = reward
+
 
 class PrivilegeEscalation(VulnerabilityOutcome):
     """Privilege escalation outcome"""
@@ -200,6 +203,10 @@ class ProbeFailed(VulnerabilityOutcome):
 class ExploitFailed(VulnerabilityOutcome):
     """This is for situations where the exploit fails """
 
+    def __init__(self, cost: float = 0.0, deception=False):
+        self.cost = cost
+        self.deception = deception
+
 
 class CachedCredential(NamedTuple):
     """Encodes a machine-port-credential triplet"""
@@ -225,7 +232,7 @@ class LeakedNodesId(VulnerabilityOutcome):
 
 
 VulnerabilityOutcomes = Union[
-    LeakedCredentials, LeakedNodesId, PrivilegeEscalation, AdminEscalation,
+    LeakedCredentials, LeakedNodesId, LeakedProfiles, PrivilegeEscalation, AdminEscalation,
     SystemEscalation, CustomerData, LateralMove, ExploitFailed]
 
 
@@ -491,8 +498,9 @@ def collect_profileusernames_from_vuln(vuln: VulnerabilityInfo) -> List[str]:
     profile_usernames = []
     # TODO change split('&') to more meaningfull because of precondition, can have other symbols like |
     if isinstance(vuln.outcome, LeakedProfiles):
-        profile_usernames += [symbol.split('.')[1] for profile_str in vuln.outcome.discovered_profiles for symbol in profile_str.split('&') if 'username.' in symbol]
-    profile_usernames += [symbol.split('.')[1] for symbol in vuln.precondition.expression.get_symbols() if 'username.' in str(symbol)]
+        profile_usernames += [symbol_str.split('.')[1] for profile_str in vuln.outcome.discovered_profiles for symbol_str in profile_str.split('&') if 'username.' in symbol_str]
+    profile_usernames += [str(symbol).split('.')[1] for symbol in vuln.precondition.expression.get_symbols() if 'username.' in str(symbol)]
+    return profile_usernames
 
 
 def collect_profile_usernames_from_nodes(

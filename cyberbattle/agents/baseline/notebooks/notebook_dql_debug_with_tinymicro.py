@@ -36,8 +36,8 @@ logging.basicConfig(stream=sys.stdout, level=logging.ERROR, format="%(levelname)
 
 # %% {"tags": ["parameters"]}
 gymid = 'CyberBattleTinyMicro-v0'
-iteration_count = 150
-training_episode_count = 10
+iteration_count = 100
+training_episode_count = 50
 
 # %%
 # Load the gym environment
@@ -68,7 +68,7 @@ dqn_learning_run = learner.epsilon_greedy_search(
     epsilon=0.90,
     epsilon_exponential_decay=5000,
     epsilon_minimum=0.10,
-    verbosity=Verbosity.Quiet,
+    verbosity=Verbosity.Normal,
     render=False,
     plot_episodes_length=False,
     title="DQL"
@@ -84,7 +84,7 @@ l = dqn_learning_run['learner']
 # %%
 # Use the trained agent to run the steps one by one
 
-max_steps = 10
+max_steps = iteration_count
 
 # next action suggested by DQL agent
 h = []

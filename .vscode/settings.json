@@ -32,15 +32,18 @@
     "python.analysis.typeCheckingMode": "off",
     //"typescript.workspaceSymbols.scope": "currentProject",
     // "search.useGlobalIgnoreFiles": true,
-    // "files.watcherExclude": {
-    //     "typings/**": true,
-    //     "venv/**": true,
-    //     "~/.vscode-server/**": true,
-    //     "**/.npm/**": true,
-    //     "**/.github/**": true,
-    //     "**/.pytest_cache/**": true,
-    //     "**/.cache/**": true
-    // },
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/*/**": true,
+        "typings/**": true,
+        "venv/**": true,
+        "~/.vscode-server/**": true,
+        "**/.npm/**": true,
+        "**/.github/**": true,
+        "**/.pytest_cache/**": true,
+        "**/.cache/**": true
+    },
     // "files.exclude": {
     //     "typings/**": true,
     //     "venv/**": true,

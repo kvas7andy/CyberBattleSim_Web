@@ -140,7 +140,7 @@ Observation = TypedDict(
         # Mapping profile index to internal IDs of all nodes discovered so far.
         # The external node index used by the agent to refer to a node
         # is defined as the index of the node in this array
-        '_discovered_profiles': Set[model.Profile],
+        '_discovered_profiles': List[model.Profile],
 
         # The subgraph of nodes discovered so far with annotated edges
         # representing interactions that took place during the simulation. (See
@@ -225,14 +225,15 @@ class EnvironmentBounds(NamedTuple):
                        identifiers: model.Identifiers,
                        maximum_total_credentials: int,
                        maximum_node_count: int,
-                       maximum_discoverable_credentials_per_action: Optional[int] = None
+                       maximum_discoverable_credentials_per_action: Optional[int] = None,
+                       maximum_profiles_count: Optional[int] = None
                        ):
         if not maximum_discoverable_credentials_per_action:
             maximum_discoverable_credentials_per_action = maximum_total_credentials
         return EnvironmentBounds(
             maximum_total_credentials=maximum_total_credentials,
             maximum_node_count=maximum_node_count,
-            maximum_profiles_count=len(identifiers.porfile_usernames),
+            maximum_profiles_count=max(len(identifiers.profile_usernames), maximum_profiles_count),
             maximum_discoverable_credentials_per_action=maximum_discoverable_credentials_per_action,
             port_count=len(identifiers.ports),
             property_count=len(identifiers.properties),
@@ -307,7 +308,7 @@ class CyberBattleEnv(gym.Env):
     def __reset_environment(self) -> None:
         self.__environment: model.Environment = copy.deepcopy(self.__initial_environment)
         self.__discovered_nodes: List[model.NodeID] = []
-        self.__discovered_profiles: Set[model.Profile] = {}
+        self.__discovered_profiles: List[model.Profile] = []
         self.__owned_nodes_indices_cache: Optional[List[int]] = None
         self.__credential_cache: List[model.CachedCredential] = []
         self.__episode_rewards: List[float] = []
@@ -403,6 +404,7 @@ class CyberBattleEnv(gym.Env):
                  maximum_total_credentials: int = 1000,
                  maximum_node_count: int = None,
                  maximum_discoverable_credentials_per_action: int = 5,
+                 maximum_profiles_count: int = 1,
                  defender_agent: Optional[DefenderAgent] = None,
                  attacker_goal: Optional[AttackerGoal] = AttackerGoal(own_atleast_percent=1.0),
                  defender_goal=DefenderGoal(eviction=True),
@@ -440,6 +442,7 @@ class CyberBattleEnv(gym.Env):
             maximum_total_credentials=maximum_total_credentials,
             maximum_node_count=maximum_node_count,
             maximum_discoverable_credentials_per_action=maximum_discoverable_credentials_per_action,
+            maximum_profiles_count=maximum_profiles_count,
             identifiers=initial_environment.identifiers)
 
         self.validate_environment(initial_environment)
@@ -670,7 +673,7 @@ class CyberBattleEnv(gym.Env):
                         bitmask["local_vulnerability"][source_index, vulnerability_index] = 1
 
                 # Remote: Any other node discovered so far is a potential remote target
-                # TODO self._actuator._check_profile() OR check  preconditions of vulns, that some are not accessible
+                # TODO self._actuator._check_profiles() OR check  preconditions of vulns, that some are not accessible
 
                 for target_node_id in self.__discovered_nodes:
                     target_index = self.__find_external_index(target_node_id)
@@ -911,12 +914,12 @@ class CyberBattleEnv(gym.Env):
             for profile_str in outcome.discovered_profiles:
                 profile_dict = self._actuator._profile_str_to_dict(profile_str)
                 if "username" not in profile_dict.keys():
-                    self.__discovered_profiles.add(model.Profile(profile_dict))
+                    self.__discovered_profiles.append(model.Profile(profile_dict))
                     newly_discovered_profiles_count += len(profile_dict)
                 else:
                     if profile_dict["username"] not in [prof.username for prof in self.__discovered_profiles]:
                         newly_discovered_profiles_count += len(profile_dict)
-                        self.__discovered_profiles.add(model.Profile(profile_dict))
+                        self.__discovered_profiles.append(model.Profile(profile_dict))
                     else:
                         for profile in self.__discovered_profiles:
                             if profile_dict["username"] == profile.username:
