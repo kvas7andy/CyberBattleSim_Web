@@ -78,7 +78,7 @@ CREDENTIAL_DISCOVERED_REWARD = 3
 PROPERTY_DISCOVERED_REWARD = 2
 
 # Fixed reward for discovering a new profile data, full or partial
-PROFILE_DISCOVERED_REWARD = 3
+PROFILE_DISCOVERED_REWARD = 1
 
 
 class EdgeAnnotation(Enum):
@@ -125,7 +125,7 @@ class AgentActions:
         """
         self._environment = environment
         self._gathered_credentials: Set[model.CredentialID] = set()
-        self._gathered_profiles: Set[model.Profile] = set()
+        self._gathered_profiles: List[model.Profile] = []
         self._discovered_nodes: "OrderedDict[model.NodeID, NodeTrackingInformation]" = OrderedDict()
         self._throws_on_invalid_actions = throws_on_invalid_actions
 
@@ -141,11 +141,11 @@ class AgentActions:
         for node_id in self._discovered_nodes:
             yield (node_id, self._environment.get_node(node_id))
 
-    def _profile_str_to_dict(profile_str: str) -> dict:
+    def _profile_str_to_dict(self, profile_str: str) -> dict:
         profile_dict = {}
         type_hints = get_type_hints(model.Profile)
-        for property in profile_str.split('&'):
-            key, val = property.split('.')
+        for symbol_str in profile_str.split('&'):
+            key, val = symbol_str.split('.')
             if str(model.RolesType) in str(type_hints[key]):
                 if key in profile_dict.keys() and val not in profile_dict[key]:
                     profile_dict[key] = profile_dict[key].union({val})
@@ -155,15 +155,22 @@ class AgentActions:
                 profile_dict[key] = val
         return profile_dict
 
-    def _check_profile(self, profile: model.Profile, vulnerability: model.VulnerabilityInfo) -> bool:
+    def _check_profiles(self, profiles: List[model.Profile], vulnerability: model.VulnerabilityInfo) -> bool:
         expr = vulnerability.precondition.expression
-        profile_symbols = ALGEBRA.parse(str(profile)).get_symbols()
+        expr_profile_symbols = [i for i in expr.get_symbols() if '.' in str(i)]
+        if not len(profiles):
+            return len(expr_profile_symbols) == 0
 
-        true_value = ALGEBRA.parse('true')
-        false_value = ALGEBRA.parse('false')
-        mapping = {i: true_value if i in profile_symbols or '.' not in str(i) else false_value
-                   for i in expr.get_symbols()}
-        is_true: bool = cast(boolean.Expression, expr.subs(mapping)).simplify() == true_value
+        for profile in profiles:
+            profile_symbols = ALGEBRA.parse(str(profile)).get_symbols()
+
+            true_value = ALGEBRA.parse('true')
+            false_value = ALGEBRA.parse('false')
+            mapping = {i: true_value if i in profile_symbols or '.' not in str(i) else false_value
+                       for i in expr.get_symbols()}
+            is_true: bool = cast(boolean.Expression, expr.subs(mapping)).simplify() == true_value
+            if is_true:
+                break
         return is_true
 
     def _check_prerequisites(self, target: model.NodeID, vulnerability: model.VulnerabilityInfo) -> bool:
@@ -173,16 +180,13 @@ class AgentActions:
         """
         node: model.NodeInfo = self._environment.network.nodes[target]['data']
 
-        node_flags = node.properties
+        node_flags = node.properties  # self.get_discovered_properties(target)  # node.properties
         expr = vulnerability.precondition.expression
 
         # # TODO check which can be ommitted if switch action was before thus we need to check only CURRENT_PROFILE
-        # for profile in self._gathered_profiles:
-        #     if self._check_profile(profile, vulnerability):
+        #
+        #     if self._check_profiles(self._gathered_profiles, vulnerability):
         #         break
-
-        # if not self._check_profile(profile, vulnerability):
-        #     return False
 
         true_value = ALGEBRA.parse('true')
         false_value = ALGEBRA.parse('false')
@@ -320,13 +324,13 @@ class AgentActions:
             for profile_str in outcome.discovered_profiles:
                 profile_dict = self._profile_str_to_dict(profile_str)
                 if "username" not in profile_dict.keys():
-                    self._gathered_profiles.add(model.Profile(profile_dict))
+                    self._gathered_profiles.append(model.Profile(**profile_dict))
                     # profile.update(profile_dict)
                     newly_discovered_profiles += len(profile_dict)
                 else:
                     if profile_dict["username"] not in [prof.username for prof in self._gathered_profiles]:
                         newly_discovered_profiles += len(profile_dict)
-                        self._gathered_profiles.add(model.Profile(profile_dict))
+                        self._gathered_profiles.append(model.Profile(**profile_dict))
                     else:
                         for profile in self._gathered_profiles:
                             if profile_dict["username"] == profile.username:
@@ -335,7 +339,7 @@ class AgentActions:
                                 #     if value is None and key in profile_dict.keys():
                                 #         profile
 
-                logger.info('discovered profile: ' + str(profile))
+                logger.info('discovered profile: ' + str(profile_str))
                 # TODO annotate somehow for visibility self.__annotate_edge(reference_node, credential.node, EdgeAnnotation.KNOWS)
 
         return newly_discovered_nodes, newly_discovered_nodes_value, newly_discovered_credentials, newly_discovered_profiles
@@ -389,11 +393,8 @@ class AgentActions:
         if vulnerability.type != expected_type:
             raise ValueError(f"vulnerability id '{vulnerability_id}' is for an attack of type {vulnerability.type}, expecting: {expected_type}")
 
-        for profile in self._gathered_profiles:
-            if self._check_profile(profile, vulnerability_id):
-                break
-        if not self._check_profile(profile, vulnerability_id):
-            return ActionResult(reward=Penalty.INVALID_ACTION, outcome=None)
+        if not self._check_profiles(self._gathered_profiles, vulnerability):
+            return False, ActionResult(reward=Penalty.INVALID_ACTION, outcome=model.ExploitFailed())
 
         # check vulnerability prerequisites
         if not self._check_prerequisites(node_id, vulnerability):
@@ -455,7 +456,7 @@ class AgentActions:
 
         reward -= vulnerability.cost
 
-        logger.info("GOT REWARD: " + vulnerability.reward_string)
+        logger.info("GOT REWARD {}: {}".format(reward, vulnerability.reward_string))
         return True, ActionResult(reward=reward, outcome=outcome)
 
     def exploit_remote_vulnerability(self,
@@ -686,6 +687,7 @@ class AgentActions:
 
     def list_all_attacks(self) -> List[Dict[str, object]]:
         """List all possible attacks from all the nodes currently owned by the attacker"""
+        iter_profiles = iter(self._gathered_profiles)
         on_owned_nodes: List[Dict[str, object]] = [
             {'id': n['id'],
              'internal index': i,
@@ -694,7 +696,8 @@ class AgentActions:
              'discovered node properties': list(map(self._environment.identifiers.properties.__getitem__, self.get_discovered_properties(n['id']))),
              'local_attacks': self.list_local_attacks(n['id']),
              'remote_attacks': self.list_remote_attacks(n['id']),
-             'gathered_credentials (no restrict to node)': self._gathered_credentials
+             'gathered_credentials (no restrict to node)': self._gathered_credentials,
+             'discovered profiles': next(iter_profiles, "")
              }
             for i, n in enumerate(self.list_nodes()) if n['status'] == 'owned']
         on_discovered_nodes: List[Dict[str, object]] = [{'id': n['id'],
@@ -704,9 +707,10 @@ class AgentActions:
                                                          'discovered node properties': list(map(self._environment.identifiers.properties.__getitem__, self.get_discovered_properties(n['id']))),
                                                          'local_attacks': None,
                                                          'remote_attacks': self.list_remote_attacks(n['id']),
-                                                         'gathered_credentials (no restrict to node)': self._gathered_credentials}
+                                                         'gathered_credentials (no restrict to node)': self._gathered_credentials,
+                                                         'discovered profiles': next(iter_profiles, "")}
                                                         for i, n in enumerate(self.list_nodes()) if n['status'] != 'owned']
-        return on_owned_nodes + on_discovered_nodes + [{'discovered profiles': self._gathered_profiles}]
+        return on_owned_nodes + on_discovered_nodes
 
     def print_all_attacks(self) -> None:
         """Pretty print list of all possible attacks from all the nodes currently owned by the attacker"""

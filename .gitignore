@@ -48,6 +48,8 @@ sftp*-config.json
 
 # data
 *.zip
+/logdir/**/*.csv
+/logdir/**/*.tfevents.*
 /venv/**
 /.cache/**
 
@@ -65,3 +67,17 @@ log.txt
 notebooks/output/**
 .gitconfig
 notebooks/images/**
+
+#.bash_history
+#.bashrc
+#.env
+.ipython/
+.jupyter/
+.local/
+.npm/
+#.profile
+.python_history
+.bash_history
+.ssh/
+.vscode-server/
+#.vscode/extension-mover-5-false10-2022.sh

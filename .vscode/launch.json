@@ -13,6 +13,13 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "Python: debug tinymicro",
+            "type": "python",
+            "request": "launch",
+            "program": "cyberbattle/agents/baseline/notebooks/notebook_dql_debug_with_tinymicro.py",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",

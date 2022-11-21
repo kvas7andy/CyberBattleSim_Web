@@ -105,7 +105,9 @@ class Feature_active_node_id(Feature):
 
 
 class Feature_discovered_nodeproperties_sliding(Feature):
-    """Bitmask indicating node properties seen in last few cache entries"""  # Actually, node properties seen in last few discovered nodes (not 'cache entries', as the matrix does not store last seen discovered properties fo any node (stacked as within the order of dicsovery),
+    """Bitmask indicating node properties seen in last few cache entries"""
+    # Actually, node properties seen in last few discovered nodes
+    # (not 'cache entries', as the matrix does not store last seen discovered properties for any node, stacked as within the order of dicsovery),
     # but current state of discovered nodes, accross maximum self.window_size discovered nodes)
     window_size = 3
 
