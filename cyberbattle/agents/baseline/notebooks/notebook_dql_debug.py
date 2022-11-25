@@ -24,10 +24,12 @@ the DQL agent and then run it one step at a time.
 import sys
 import logging
 import gym
+
+from cyberbattle.agents.baseline.agent_wrapper import ActionTrackingStateAugmentation, AgentWrapper, Verbosity
 import cyberbattle.agents.baseline.learner as learner
 import cyberbattle.agents.baseline.agent_wrapper as w
 import cyberbattle.agents.baseline.agent_dql as dqla
-from cyberbattle.agents.baseline.agent_wrapper import ActionTrackingStateAugmentation, AgentWrapper, Verbosity
+
 logging.basicConfig(stream=sys.stdout, level=logging.ERROR, format="%(levelname)s: %(message)s")
 
 # %% {"tags": ["parameters"]}

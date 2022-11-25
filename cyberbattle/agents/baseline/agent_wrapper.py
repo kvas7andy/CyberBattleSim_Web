@@ -512,7 +512,7 @@ class Feature_failed_actions_at_node(Feature):
         return np.minimum(a.failed_action_count[node, :], self.max_action_count - 1)
 
 
-class Verbosity(enum.Enum):
+class Verbosity(enum.IntEnum):
     """Verbosity of the learning function"""
     Quiet = 0
     Normal = 1

@@ -71,7 +71,12 @@ class ListeningService:
 
 
 x = ListeningService(name='d')
-VulnerabilityID = str
+
+
+class VulnerabilityID(NamedTuple):
+    target_node: str
+    vulnerability_id: str
+
 
 # Probability rate
 Probability = float

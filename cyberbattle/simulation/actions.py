@@ -35,16 +35,16 @@ DiscoveredNodeInfo = TypedDict('DiscoveredNodeInfo', {
 class Penalty:
     """Penalties (=negative reward) returned for some actions taken in the simulation"""
     # penalty for generic suspiciousness
-    SUPSPICIOUSNESS = -5.0
+    SUPSPICIOUSNESS = -7.0  # -7.0
 
     # penalty for attempting a connection to a port that was not open
     SCANNING_UNOPEN_PORT = -10.0
 
     # penalty for repeating the same exploit attempt
-    REPEAT = -1
+    REPEAT = -9
 
     LOCAL_EXPLOIT_FAILED = -20
-    FAILED_REMOTE_EXPLOIT = -50
+    FAILED_REMOTE_EXPLOIT = -30
 
     # penalty for attempting to connect or execute an action on a node that's not in running state
     MACHINE_NOT_RUNNING = 0
@@ -60,16 +60,16 @@ class Penalty:
 
     # invalid action (e.g., running an attack from a node that's not owned)
     # (Used only if `throws_on_invalid_actions` is set to False)
-    INVALID_ACTION = -1
+    INVALID_ACTION = -5
 
 
 # Reward for the first time a local or remote attack
 # gets successfully executed since the last time the target node was imaged.
 # NOTE: the attack cost gets substracted from this reward.
-NEW_SUCCESSFULL_ATTACK_REWARD = 7
+NEW_SUCCESSFULL_ATTACK_REWARD = 15
 
 # Fixed reward for discovering a new node
-NODE_DISCOVERED_REWARD = 5
+NODE_DISCOVERED_REWARD = 3
 
 # Fixed reward for discovering a new credential
 CREDENTIAL_DISCOVERED_REWARD = 3
@@ -78,7 +78,7 @@ CREDENTIAL_DISCOVERED_REWARD = 3
 PROPERTY_DISCOVERED_REWARD = 2
 
 # Fixed reward for discovering a new profile data, full or partial
-PROFILE_DISCOVERED_REWARD = 1
+PROFILE_DISCOVERED_REWARD = 3
 
 
 class EdgeAnnotation(Enum):
@@ -383,7 +383,7 @@ class AgentActions:
             if throw_if_vulnerability_not_present:
                 raise ValueError(f"Vulnerability '{vulnerability_id}' not supported by node='{node_id}'")
             else:
-                logger.info(f"Vulnerability '{vulnerability_id}' not supported by node '{node_id}'")
+                logger.info("Vulnerability '{}' not supported by node '{}'".format(vulnerability_id, node_id))
                 return False, ActionResult(reward=Penalty.SUPSPICIOUSNESS, outcome=None)
 
         vulnerability = vulnerabilities[vulnerability_id]
@@ -393,14 +393,19 @@ class AgentActions:
         if vulnerability.type != expected_type:
             raise ValueError(f"vulnerability id '{vulnerability_id}' is for an attack of type {vulnerability.type}, expecting: {expected_type}")
 
+        reward = 0
+        reward -= vulnerability.cost
+
         if not self._check_profiles(self._gathered_profiles, vulnerability):
-            return False, ActionResult(reward=Penalty.INVALID_ACTION, outcome=model.ExploitFailed())
+            reward += Penalty.FAILED_REMOTE_EXPLOIT
+            logger.info("Failed exploit with reward {}: {}".format(reward, vulnerability.reward_string))
+            return False, ActionResult(reward=reward, outcome=model.ExploitFailed())
 
         # check vulnerability prerequisites
-        if not self._check_prerequisites(node_id, vulnerability):
-            return False, ActionResult(reward=failed_penalty, outcome=model.ExploitFailed())
-
-        reward = 0
+        if isinstance(outcome, model.ExploitFailed) or not self._check_prerequisites(node_id, vulnerability):
+            reward += failed_penalty
+            logger.info("Failed exploit with reward {}: {}".format(reward, vulnerability.reward_string))
+            return False, ActionResult(reward=reward, outcome=model.ExploitFailed())
 
         # if the vulnerability type is a privilege escalation
         # and if the escalation level is not already reached on that node,
@@ -430,6 +435,9 @@ class AgentActions:
             newly_discovered_properties = self.__mark_nodeproperties_as_discovered(node_id, outcome.discovered_properties)
             reward += newly_discovered_properties * PROPERTY_DISCOVERED_REWARD
 
+        elif isinstance(outcome, model.CustomerData):
+            reward += outcome.reward
+
         if node_id not in self._discovered_nodes:
             self._discovered_nodes[node_id] = NodeTrackingInformation()
 
@@ -453,8 +461,6 @@ class AgentActions:
         reward += newly_discovered_nodes * NODE_DISCOVERED_REWARD
         reward += newly_discovered_credentials * CREDENTIAL_DISCOVERED_REWARD
         reward + newly_discovered_profiles * PROFILE_DISCOVERED_REWARD
-
-        reward -= vulnerability.cost
 
         logger.info("GOT REWARD {}: {}".format(reward, vulnerability.reward_string))
         return True, ActionResult(reward=reward, outcome=outcome)
