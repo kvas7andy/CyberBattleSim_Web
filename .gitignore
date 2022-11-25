@@ -48,8 +48,8 @@ sftp*-config.json
 
 # data
 *.zip
-/logdir/**/*.csv
-/logdir/**/*.tfevents.*
+**/*.csv
+**/*.tfevents.*
 /venv/**
 /.cache/**
 

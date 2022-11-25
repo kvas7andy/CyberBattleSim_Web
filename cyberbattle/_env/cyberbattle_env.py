@@ -226,14 +226,14 @@ class EnvironmentBounds(NamedTuple):
                        maximum_total_credentials: int,
                        maximum_node_count: int,
                        maximum_discoverable_credentials_per_action: Optional[int] = None,
-                       maximum_profiles_count: Optional[int] = None
+                       minimum_profiles_count: Optional[int] = 0
                        ):
         if not maximum_discoverable_credentials_per_action:
             maximum_discoverable_credentials_per_action = maximum_total_credentials
         return EnvironmentBounds(
             maximum_total_credentials=maximum_total_credentials,
             maximum_node_count=maximum_node_count,
-            maximum_profiles_count=max(len(identifiers.profile_usernames), maximum_profiles_count),
+            maximum_profiles_count=max(len(identifiers.profile_usernames), minimum_profiles_count),
             maximum_discoverable_credentials_per_action=maximum_discoverable_credentials_per_action,
             port_count=len(identifiers.ports),
             property_count=len(identifiers.properties),
@@ -339,7 +339,7 @@ class CyberBattleEnv(gym.Env):
     def validate_environment(self, environment: model.Environment):
         """Validate that the size of the network and associated constants fits within
         the dimensions bounds set for the CyberBattle gym environment"""
-        assert environment.identifiers.ports
+        # assert environment.identifiers.ports
         assert environment.identifiers.properties
         assert environment.identifiers.local_vulnerabilities
         assert environment.identifiers.remote_vulnerabilities
@@ -404,7 +404,7 @@ class CyberBattleEnv(gym.Env):
                  maximum_total_credentials: int = 1000,
                  maximum_node_count: int = None,
                  maximum_discoverable_credentials_per_action: int = 5,
-                 maximum_profiles_count: int = 1,
+                 minimum_profiles_count: int = 0,
                  defender_agent: Optional[DefenderAgent] = None,
                  attacker_goal: Optional[AttackerGoal] = AttackerGoal(own_atleast_percent=1.0),
                  defender_goal=DefenderGoal(eviction=True),
@@ -442,7 +442,7 @@ class CyberBattleEnv(gym.Env):
             maximum_total_credentials=maximum_total_credentials,
             maximum_node_count=maximum_node_count,
             maximum_discoverable_credentials_per_action=maximum_discoverable_credentials_per_action,
-            maximum_profiles_count=maximum_profiles_count,
+            minimum_profiles_count=minimum_profiles_count,
             identifiers=initial_environment.identifiers)
 
         self.validate_environment(initial_environment)
@@ -470,7 +470,7 @@ class CyberBattleEnv(gym.Env):
         maximum_node_count = self.__bounds.maximum_node_count
         maximum_profiles_count = self.__bounds.maximum_profiles_count
         property_count = self.__bounds.property_count
-        port_count = self.__bounds.port_count
+        port_count = max(1, self.__bounds.port_count)
 
         action_spaces: ActionSpaceDict = {
             "local_vulnerability": spaces.MultiDiscrete(
@@ -552,7 +552,7 @@ class CyberBattleEnv(gym.Env):
             # the credential index is given by the row index (i.e. order of discovery)
             # A row is of the form: (target_node_discover_index, port_index)
             'credential_cache_matrix': spaces.Tuple(
-                [spaces.MultiDiscrete([self.__bounds.maximum_node_count, self.__bounds.port_count])] * self.__bounds.maximum_total_credentials),
+                [spaces.MultiDiscrete([maximum_node_count, port_count])] * self.__bounds.maximum_total_credentials),
 
             # ---------------------------------------------------------
             # Fields that were previously in the 'info' dict:
@@ -697,18 +697,28 @@ class CyberBattleEnv(gym.Env):
     # def encoding_map(self):
     #   nodes_mapping = {node_index: self.__internal_node_id_from_external_node_index(node_index) for node_index in self.__discovered_nodes}
 
-    def pretty_print_internal_action(self, action: Action) -> str:
+    def pretty_print_internal_action(self, action: Action, output_reward_str=False) -> str:
         """Pretty print an action with internal node and vulnerability identifiers"""
         assert 1 == len(action.keys())
         assert DiscriminatedUnion.kind(action) != ''
+        action_str, reward_str = "", "'"
         if "local_vulnerability" in action:
             source_node_index, vulnerability_index = action['local_vulnerability']
-            return f"local_vulnerability(`{self.__internal_node_id_from_external_node_index(source_node_index)}, {self.__index_to_local_vulnerabilityid(vulnerability_index)})"
+            vuln_id = self.__index_to_local_vulnerabilityid(vulnerability_index)
+            node_id = self.__internal_node_id_from_external_node_index(source_node_index)
+            action_str = f"local_vulnerability(`{node_id}, {vuln_id})"
+            node_info = self.environment.get_node(node_id)
+            if vuln_id in node_info.vulnerabilities:
+                reward_str = node_info.vulnerabilities[vuln_id].reward_string
         elif "remote_vulnerability" in action:
             source_node, target_node, vulnerability_index = action["remote_vulnerability"]
             source_node_id = self.__internal_node_id_from_external_node_index(source_node)
             target_node_id = self.__internal_node_id_from_external_node_index(target_node)
-            return f"remote_vulnerability(`{source_node_id}, `{target_node_id}, {self.__index_to_remote_vulnerabilityid(vulnerability_index)})"
+            vuln_id = self.__index_to_remote_vulnerabilityid(vulnerability_index)
+            action_str = f"remote_vulnerability(`{source_node_id}, `{target_node_id}, {vuln_id})"
+            node_info = self.environment.get_node(target_node_id)
+            if vuln_id in node_info.vulnerabilities:
+                reward_str = node_info.vulnerabilities[vuln_id].reward_string
         elif "connect" in action:
             source_node, target_node, port_index, credential_cache_index = action["connect"]
             assert credential_cache_index >= 0
@@ -716,7 +726,12 @@ class CyberBattleEnv(gym.Env):
                 return "connect(invalid)"
             source_node_id = self.__internal_node_id_from_external_node_index(source_node)
             target_node_id = self.__internal_node_id_from_external_node_index(target_node)
-            return f"connect(`{source_node_id}, `{target_node_id}, {self.__index_to_port_name(port_index)}, {self.__credential_cache[credential_cache_index].credential})"
+            action_str = f"connect(`{source_node_id}, `{target_node_id}, {self.__index_to_port_name(port_index)}, {self.__credential_cache[credential_cache_index].credential})"
+        if action_str:
+            if output_reward_str:
+                return action_str, reward_str
+            else:
+                return action_str,
         raise ValueError("Invalid discriminated union value: " + str(action))
 
     def __execute_action(self, action: Action) -> actions.ActionResult:
@@ -746,7 +761,7 @@ class CyberBattleEnv(gym.Env):
 
         elif "connect" in action:
             source_node, target_node, port_index, credential_cache_index = action["connect"]
-            if credential_cache_index < 0 or credential_cache_index >= len(self.__credential_cache):
+            if 0 > credential_cache_index >= len(self.__credential_cache):
                 return actions.ActionResult(reward=-1, outcome=None)
 
             source_node_id = self.__internal_node_id_from_external_node_index(source_node)
@@ -937,6 +952,7 @@ class CyberBattleEnv(gym.Env):
             obs['probe_result'] = numpy.int32(2)
         elif isinstance(outcome, model.ProbeFailed):
             obs['probe_result'] = numpy.int32(1)
+        # TODO include in obs ExploitFailed result to let agent_wrapper know failed actions using this outocme, instead of condition (reward < 0)
         elif isinstance(outcome, model.PrivilegeEscalation):
             obs['escalation'] = numpy.int32(outcome.level)
 
@@ -1175,8 +1191,8 @@ class CyberBattleEnv(gym.Env):
             elif self.__defender_goal_reached():
                 self.__done = True
                 reward = self.__LOSING_REWARD
-            else:
-                reward = max(0., reward)
+            # else:
+            #     reward = max(0., reward)
 
         except OutOfBoundIndexError as error:
             logging.warning('Invalid entity index: ' + error.__str__())

@@ -21,7 +21,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecEnv
 from cyberbattle._env.flatten_wrapper import FlattenObservationWrapper, FlattenActionWrapper
 import os
 os.environ["CUDA_LAUNCH_BLOCKING"] = '1'
-th.cuda.set_device('cuda:4')
+th.cuda.set_device('cuda:3')
 retrain = ['a2c']
 
 
