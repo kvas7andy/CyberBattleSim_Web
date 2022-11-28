@@ -156,9 +156,9 @@ class LateralMove(VulnerabilityOutcome):
 class CustomerData(VulnerabilityOutcome):
     """Access customer data on target node"""
 
-    def __init__(self, reward: float = 0.0, flag: bool = False):
+    def __init__(self, reward: float = 0.0, ctf_flag: bool = False):
         self.reward = reward
-        self.ctf_flag = flag
+        self.ctf_flag = ctf_flag
 
 
 class PrivilegeEscalation(VulnerabilityOutcome):
