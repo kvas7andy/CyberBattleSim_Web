@@ -89,6 +89,9 @@ Observation = TypedDict(
         # whether an escalation was completed and to which level
         'escalation': numpy.int32,
 
+        # whether Cusomer leak is connected with CTF flag
+        'ctf_flag': numpy.int32,
+
         # credentials that were just discovered after executing an action
         'leaked_credentials': Tuple[numpy.ndarray, ...],  # type: ignore
 
@@ -256,6 +259,8 @@ class AttackerGoal(NamedTuple):
     # Include goal to own at least the specified percentage of the network nodes.
     # Set to 1.0 to define goal as the ownership of all network nodes.
     own_atleast_percent: float = 1.0
+    # CTF_flag acquiring goal, necessary to check internal
+    ctf_flag: bool = False
 
 
 class DefenderGoal(NamedTuple):
@@ -499,6 +504,8 @@ class CyberBattleEnv(gym.Env):
             'probe_result': spaces.Discrete(3),
             # Esclation result
             'escalation': spaces.Discrete(model.PrivilegeLevel.MAXIMUM + 1),
+            # CTF_flag obtained on this stage
+            'ctf_flag': spaces.Discrete(2),
             # Array of slots describing credentials that were leaked
             'leaked_credentials': spaces.Tuple(
                 # the 1st component indicates if the slot is used or not (SLOT_USED or SLOT_UNSUED)
@@ -616,6 +623,10 @@ class CyberBattleEnv(gym.Env):
         """Find the external index associated with the specified node ID"""
         return self.__discovered_nodes.index(node_id)
 
+    def find_external_index(self, node_id: model.NodeID) -> int:
+        """Find the external index associated with the specified node ID"""
+        return self.__discovered_nodes.index(node_id) if node_id in self.__discovered_nodes else None
+
     def __agent_owns_node(self, node_id: model.NodeID) -> bool:
         node = self.__environment.get_node(node_id)
         pwned: bool = node.agent_installed
@@ -673,7 +684,7 @@ class CyberBattleEnv(gym.Env):
                         bitmask["local_vulnerability"][source_index, vulnerability_index] = 1
 
                 # Remote: Any other node discovered so far is a potential remote target
-                # TODO self._actuator._check_profiles() OR check  preconditions of vulns, that some are not accessible
+                # TODO self._actuator._check_discovered_profiles() OR check  preconditions of vulns, that some are not accessible
 
                 for target_node_id in self.__discovered_nodes:
                     target_index = self.__find_external_index(target_node_id)
@@ -787,6 +798,7 @@ class CyberBattleEnv(gym.Env):
             lateral_move=numpy.int32(0),
             customer_data_found=(numpy.int32(0),),
             escalation=numpy.int32(PrivilegeLevel.NoAccess),
+            ctf_flag=numpy.int32(0),
             action_mask=self.__get_blank_action_mask(),
             probe_result=numpy.int32(0),
             credential_cache_matrix=tuple([numpy.zeros((2))] * self.__bounds.maximum_total_credentials),
@@ -927,7 +939,7 @@ class CyberBattleEnv(gym.Env):
             # update discovered nodes
             newly_discovered_profiles_count = 0
             for profile_str in outcome.discovered_profiles:
-                profile_dict = self._actuator._profile_str_to_dict(profile_str)
+                profile_dict = model.profile_str_to_dict(profile_str)
                 if "username" not in profile_dict.keys():
                     self.__discovered_profiles.append(model.Profile(profile_dict))
                     newly_discovered_profiles_count += len(profile_dict)
@@ -947,6 +959,7 @@ class CyberBattleEnv(gym.Env):
         elif isinstance(outcome, model.LateralMove):
             obs['lateral_move'] = numpy.int32(1)
         elif isinstance(outcome, model.CustomerData):
+            obs['ctf_flag'] = outcome.flag
             obs['customer_data_found'] = (numpy.int32(1),)
         elif isinstance(outcome, model.ProbeSucceeded):
             obs['probe_result'] = numpy.int32(2)
@@ -973,6 +986,7 @@ class CyberBattleEnv(gym.Env):
         obs['_explored_network'] = self.__get_explored_network()
 
         self.__update_action_mask(obs['action_mask'])
+        self.obs = obs
         return obs, result.reward
 
     def sample_connect_action_in_expected_range(self) -> Action:
@@ -1114,6 +1128,9 @@ class CyberBattleEnv(gym.Env):
         if numpy.sum(self.__episode_rewards) < goal.reward:
             return False
 
+        if goal.ctf_flag and not self.obs['ctf_flag']:
+            return False
+
         nodes_owned = self.__get__owned_nodes_indices()
         owned_count = len(nodes_owned)
 
@@ -1177,6 +1194,7 @@ class CyberBattleEnv(gym.Env):
         try:
             result = self.__execute_action(action)
             observation, reward = self.__observation_reward_from_action_result(result)
+            self.__episode_rewards.append(reward)
 
             # Execute the defender step if provided
             if self.__defender_agent:
@@ -1204,7 +1222,6 @@ class CyberBattleEnv(gym.Env):
             duration_in_ms=duration,
             step_count=self.__stepcount,
             network_availability=self._defender_actuator.network_availability)
-        self.__episode_rewards.append(reward)
 
         return observation, reward, self.__done, info
 

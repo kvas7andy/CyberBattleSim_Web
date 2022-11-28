@@ -31,8 +31,10 @@ import cyberbattle.agents.baseline.learner as learner
 
 import torch
 # torch.cuda.set_device('cuda:3')
+logging.basicConfig(stream=sys.stdout, format="%(levelname)s: %(message)s")
+LOGGER = logging.getLogger('myloggername')
+LOGGER.setLevel(logging.ERROR)
 
-logging.basicConfig(stream=sys.stdout, level=logging.ERROR, format="%(levelname)s: %(message)s")
 
 # %% {"tags": ["parameters"]}
 gymid = 'CyberBattleTinyMicro-v0'
@@ -82,6 +84,9 @@ dqn_learning_run = learner.epsilon_greedy_search(
 # %%
 # initialize the environment
 
+LOGGER.setLevel(logging.INFO)
+LOGGER.info("Now evaluate trained network")
+
 current_o = ctf_env.reset()
 wrapped_env = AgentWrapper(ctf_env, ActionTrackingStateAugmentation(ep, current_o))
 l = dqn_learning_run['learner']
@@ -94,24 +99,30 @@ verbosity = Verbosity.Normal
 
 # next action suggested by DQL agent
 h = []
+done = False
+cum_reward = 0
 for i in range(max_steps):
+    if done:
+        break
     # run the suggested action
     action_style, next_action, _ = l.exploit(wrapped_env, current_o)
 
     if next_action is None:
         print("Next aciton == None, returned with aciton_style: ", action_style)
         break
-    current_o, reward, _, _ = wrapped_env.step(next_action)
+    current_o, reward, done, _ = wrapped_env.step(next_action)
+    cum_reward += reward
+    action_str, reward_str = wrapped_env.pretty_print_internal_action(next_action, output_reward_str=True)
     h.append((ctf_env.get_explored_network_node_properties_bitmap_as_numpy(current_o),
               reward,
-              wrapped_env.pretty_print_internal_action(next_action, output_reward_str=True)))
+              (action_str + "\t action  validity: " + action_style, reward_str)))
     if verbosity == Verbosity.Verbose or (verbosity == Verbosity.Normal and reward > 0) or not i % 10:
         print(f"Step: {i}\t", end="")
         # if verbosity == Verbosity.Verbose:
         #     print(f"network_bitmap_explore: {h[-1][0]}")
-        print(f"reward:{h[-1][1]} \tnext_action: {h[-1][2][0]} \treward_string: {h[-1][2][1]}")
+        print(f"reward:{h[-1][1]}\t cumulative reward: {cum_reward}\t next_action: {h[-1][2][0]}\t reward_string: {h[-1][2][1]}")
 
-print(f'len: {len(h)}')
+print(f'len: {len(h)}, cumulative reward: {cum_reward}')
 
 # %%
 ctf_env.render()

@@ -113,6 +113,15 @@ class CyberBattleStateActionModel:
             gym_action = self.action_space.specialize_to_gymaction(
                 source_node, observation, np.int32(abstract_action))
 
+            # When target node is chosen randomly in specialize_to_gymaction, we relink target_node to the target_node vrom vulnerability, using its VulnerabilityID = ("target_node","vuln_id")
+            if gym_action and "remote_vulnerability" in gym_action.keys():
+                vuln_id = wrapped_env.identifiers.remote_vulnerabilities[gym_action["remote_vulnerability"][2]]
+                node_id = wrapped_env.find_external_index(vuln_id[0])
+                if node_id:
+                    gym_action["remote_vulnerability"][1] = node_id
+                else:  # invalid remote env, no nodeid in discovered_nodes
+                    gym_action = None
+
             if not gym_action:
                 return "exploit[undefined]->explore", None, None
 
@@ -369,7 +378,7 @@ class DeepQLearnerPolicy(Learner):
         if i_episode % self.target_update == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
 
-    def lookup_dqn(self, states_to_consider: List[ndarray]) -> Tuple[List[np.int32], List[np.int32]]:
+    def lookup_dqn(self, states_to_consider: ndarray) -> Tuple[List[np.int32], List[np.int32]]:
         """ Given a set of possible current states return:
             - index, in the provided list, of the state that would yield the best possible outcome
             - the best action to take in such a state"""
@@ -456,9 +465,9 @@ class DeepQLearnerPolicy(Learner):
         unique_active_actors_features: List[ndarray] = list(np.unique(active_actors_features, axis=0))
 
         # array of actor state vector for every possible set of node features
-        candidate_actor_state_vector: List[ndarray] = [
+        candidate_actor_state_vector: ndarray = np.array([
             self.get_actor_state_vector(current_global_state, node_features)
-            for node_features in unique_active_actors_features]
+            for node_features in unique_active_actors_features])
 
         remaining_action_lookups, remaining_expectedq_lookups = self.lookup_dqn(candidate_actor_state_vector)
         remaining_candidate_indices = list(range(len(candidate_actor_state_vector)))

@@ -387,6 +387,9 @@ class AbstractAction(Feature):
 
             # NOTE: We can do better here than random pick: ultimately this
             # should be learnt from target node properties
+            # NOTE: NOW we have each vulnerability unique based on node where it was writter
+            # choosing remote vulnerability among identifiers.remote_vulnerabilities, 
+            # target_node is first element of typle VulnerabilityID
 
             # pick any node from the discovered ones
             # excluding the source node itself

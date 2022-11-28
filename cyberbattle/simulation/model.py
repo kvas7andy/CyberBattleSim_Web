@@ -25,7 +25,7 @@ formally defined by:
 """
 
 from datetime import datetime, time
-from typing import NamedTuple, List, Dict, Optional, Union, Tuple, Iterator, Set
+from typing import NamedTuple, List, Dict, Optional, Union, Tuple, Iterator, Set, get_type_hints
 import dataclasses
 from dataclasses import dataclass, field
 import matplotlib.pyplot as plt  # type:ignore
@@ -156,8 +156,9 @@ class LateralMove(VulnerabilityOutcome):
 class CustomerData(VulnerabilityOutcome):
     """Access customer data on target node"""
 
-    def __init__(self, reward: float = 0.0):
+    def __init__(self, reward: float = 0.0, flag: bool = False):
         self.reward = reward
+        self.ctf_flag = flag
 
 
 class PrivilegeEscalation(VulnerabilityOutcome):
@@ -442,6 +443,21 @@ def create_network(nodes: Dict[NodeID, NodeInfo]) -> nx.DiGraph:
 # Helpers to infer constants from an environment
 
 
+def profile_str_to_dict(profile_str: str) -> dict:
+    profile_dict = {}
+    type_hints = get_type_hints(Profile)
+    for symbol_str in profile_str.split('&'):
+        key, val = symbol_str.split('.')
+        if str(RolesType) in str(type_hints[key]):
+            if key in profile_dict.keys() and val not in profile_dict[key]:
+                profile_dict[key] = profile_dict[key].union({val})
+            else:
+                profile_dict[key] = {val}
+        else:
+            profile_dict[key] = val
+    return profile_dict
+
+
 def collect_ports_from_vuln(vuln: VulnerabilityInfo) -> List[PortName]:
     """Returns all the port named referenced in a given vulnerability"""
     if isinstance(vuln.outcome, LeakedCredentials):
@@ -669,3 +685,9 @@ def setup_yaml_serializer() -> None:
     yaml.add_constructor('!VulnerabilityType',
                          lambda loader, expression: VulnerabilityType[
                              loader.construct_scalar(expression)])  # type: ignore
+
+# Utility function for dictionary of vulnerabilities
+
+
+def strkey_to_tuplekey(first_tuple_key: str, source_dict: Dict) -> Dict:
+    return {(first_tuple_key, key): val for key, val in source_dict.items()}
