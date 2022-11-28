@@ -959,7 +959,7 @@ class CyberBattleEnv(gym.Env):
         elif isinstance(outcome, model.LateralMove):
             obs['lateral_move'] = numpy.int32(1)
         elif isinstance(outcome, model.CustomerData):
-            obs['ctf_flag'] = outcome.flag
+            obs['ctf_flag'] = outcome.ctf_flag
             obs['customer_data_found'] = (numpy.int32(1),)
         elif isinstance(outcome, model.ProbeSucceeded):
             obs['probe_result'] = numpy.int32(2)
