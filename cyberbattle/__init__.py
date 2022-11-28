@@ -75,7 +75,7 @@ register(
     cyberbattle_env_identifiers=tinymicro.ENV_IDENTIFIERS,
     entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicro',
     kwargs={'defender_agent': None,
-            'attacker_goal': AttackerGoal(reward=100, own_atleast=1, own_atleast_percent=0.0),
+            'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
             'defender_goal': DefenderGoal(eviction=True),
             'maximum_total_credentials': 1,
             'maximum_node_count': 11

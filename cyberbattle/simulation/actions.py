@@ -15,7 +15,7 @@ from boolean import boolean
 from collections import OrderedDict
 import logging
 from enum import Enum
-from typing import Iterator, List, NamedTuple, Optional, Set, Tuple, Dict, TypedDict, cast, get_type_hints
+from typing import Iterator, List, NamedTuple, Optional, Set, Tuple, Dict, TypedDict, cast
 from IPython.display import display
 import pandas as pd
 
@@ -41,7 +41,7 @@ class Penalty:
     SCANNING_UNOPEN_PORT = -10.0
 
     # penalty for repeating the same exploit attempt
-    REPEAT = -9
+    REPEAT = -15
 
     LOCAL_EXPLOIT_FAILED = -20
     FAILED_REMOTE_EXPLOIT = -30
@@ -141,21 +141,7 @@ class AgentActions:
         for node_id in self._discovered_nodes:
             yield (node_id, self._environment.get_node(node_id))
 
-    def _profile_str_to_dict(self, profile_str: str) -> dict:
-        profile_dict = {}
-        type_hints = get_type_hints(model.Profile)
-        for symbol_str in profile_str.split('&'):
-            key, val = symbol_str.split('.')
-            if str(model.RolesType) in str(type_hints[key]):
-                if key in profile_dict.keys() and val not in profile_dict[key]:
-                    profile_dict[key] = profile_dict[key].union({val})
-                else:
-                    profile_dict[key] = {val}
-            else:
-                profile_dict[key] = val
-        return profile_dict
-
-    def _check_profiles(self, profiles: List[model.Profile], vulnerability: model.VulnerabilityInfo) -> bool:
+    def _check_discovered_profiless(self, profiles: List[model.Profile], vulnerability: model.VulnerabilityInfo) -> bool:
         expr = vulnerability.precondition.expression
         expr_profile_symbols = [i for i in expr.get_symbols() if '.' in str(i)]
         if not len(profiles):
@@ -185,7 +171,7 @@ class AgentActions:
 
         # # TODO check which can be ommitted if switch action was before thus we need to check only CURRENT_PROFILE
         #
-        #     if self._check_profiles(self._gathered_profiles, vulnerability):
+        #     if self._check_discovered_profiless(self._gathered_profiles, vulnerability):
         #         break
 
         true_value = ALGEBRA.parse('true')
@@ -322,7 +308,7 @@ class AgentActions:
 
         elif isinstance(outcome, model.LeakedProfiles):
             for profile_str in outcome.discovered_profiles:
-                profile_dict = self._profile_str_to_dict(profile_str)
+                profile_dict = model.profile_str_to_dict(profile_str)
                 if "username" not in profile_dict.keys():
                     self._gathered_profiles.append(model.Profile(**profile_dict))
                     # profile.update(profile_dict)
@@ -396,7 +382,7 @@ class AgentActions:
         reward = 0
         reward -= vulnerability.cost
 
-        if not self._check_profiles(self._gathered_profiles, vulnerability):
+        if not self._check_discovered_profiless(self._gathered_profiles, vulnerability):
             reward += Penalty.FAILED_REMOTE_EXPLOIT
             logger.info("Failed exploit with reward {}: {}".format(reward, vulnerability.reward_string))
             return False, ActionResult(reward=reward, outcome=model.ExploitFailed())
@@ -448,7 +434,7 @@ class AgentActions:
         if already_executed:
             last_time = self._discovered_nodes[node_id].last_attack[lookup_key]
             if node_info.last_reimaging is None or last_time >= node_info.last_reimaging:
-                reward += Penalty.REPEAT
+                reward = Penalty.REPEAT - vulnerability.cost
         else:
             reward += NEW_SUCCESSFULL_ATTACK_REWARD
 

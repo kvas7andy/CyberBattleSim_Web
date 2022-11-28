@@ -22,7 +22,7 @@ nodes = {
         value=0,  # owning reward
         properties=["script_block"],
         owned_string="Attacker owns his laptop",
-        vulnerabilities=dict(
+        vulnerabilities=m.strkey_to_tuplekey("client_browser", dict(
             ScanPageSource=m.VulnerabilityInfo(
                 description="Website HTML contains information about multiple blocks leading to endpoints "
                             "AND scripts with other endpoints + variables (tags?)",
@@ -42,7 +42,7 @@ nodes = {
                 reward_string="Found script with rules of username creation from POST /register => access to GET /v2/users",
                 cost=1.0
             )
-        ),
+        )),
         agent_installed=True,
     ),
     # TODOMeeting !!!!!!! .cloudactivedefence property should be hidden in check_prerequisuites
@@ -101,20 +101,20 @@ nodes = {
     "POST /v2/register": m.NodeInfo(
         services=[],  # should I leave like this?
         value=10,  # owning reward
-        vulnerabilities={
-            m.VulnerabilityID("POST /v2/register", "POSTAsAlicAnon"): m.VulnerabilityInfo(  # LocalUser == registered user with SESSION token, but without privilages!
+        vulnerabilities=m.strkey_to_tuplekey("POST /v2/register", dict(
+            POSTAsAlicAnon=m.VulnerabilityInfo(  # LocalUser == registered user with SESSION token, but without privilages!
                 description="Trap Deceptive endpoint to check",
                 type=m.VulnerabilityType.REMOTE,
                 outcome=m.LeakedProfiles(["username.patient&id.UUIDfake"]),
                 reward_string="Register AlicAnon patient to be able to access more info",
                 cost=1.0
             )
-        }),
+        ))),
 
     "GET /v2/calendar": m.NodeInfo(
         services=[],  # should I leave like this?
         value=0,
-        vulnerabilities=dict(
+        vulnerabilities=m.strkey_to_tuplekey("GET /v2/calendar", dict(
             # Identify GET usage for anyuser
             GETAsLocalUser=m.VulnerabilityInfo(
                 description="Found usernames from calendar & property",
@@ -140,12 +140,12 @@ nodes = {
             #     reward_string="Error: day should be set between 0 and 7",
             #     cost=1.0
             # ),
-        )),
+        ))),
 
     "GET /v2/messages": m.NodeInfo(
         services=[],
         value=40,
-        vulnerabilities=dict(
+        vulnerabilities=m.strkey_to_tuplekey("GET /v2/messages", dict(
             # Identify GET usage for anyuser
             GETAsLocalUser=m.VulnerabilityInfo(
                 description="Try to get messages as fake user",
@@ -213,14 +213,14 @@ nodes = {
             #     reward_string="/v2/render is leaked",
             #     cost=1.0
             # )
-        )),
+        ))),
 
     "GET /v2/documents": m.NodeInfo(
         services=[],
         value=0,
         properties=["GET_v2_documents:a5db38da_156a_4d00_a041_9702db349ca5"],
         # properties=["LisaGWhite", "MarioD"],  # SO WE NEED INCLUDE all usernames into properties
-        vulnerabilities=dict(
+        vulnerabilities=m.strkey_to_tuplekey("GET /v2/documents", dict(
             # Identify GET usage for anyuser
             # GETAsLocalUser=m.VulnerabilityInfo(
             #     description="Getting documents as Fake user",
@@ -241,12 +241,12 @@ nodes = {
                 description="Getting documents as Chemist",
                 type=m.VulnerabilityType.REMOTE,
                 precondition=m.Precondition("roles.isChemist"),
-                outcome=m.CustomerData(1000),  # TODOMeeting maybe have another outcome as FLAG? with reward? Or even separate those 2 HTML images?
+                outcome=m.CustomerData(2000, ctf_flag=True),  # TODOMeeting maybe have another outcome as FLAG? with reward? Or even separate those 2 HTML images?
                 # Probe=> property and then 2 vulns with 2 properties
                 reward_string="Gaining 2 HTML entries, one of which has CTF flag in base-64 encoded as image",
                 cost=1.0
             ),
-        )),
+        ))),
 
     # "GET /v2/render": m.NodeInfo(
     #     services=[],
@@ -313,7 +313,7 @@ nodes = {
         services=[],  # should I leave like this?
         value=100,  # owning reward
         # properties=["LisaGWhite", "MarioDFiles"],  # SO WE NEED INCLUDE all usernames into properties
-        vulnerabilities=dict(
+        vulnerabilities=m.strkey_to_tuplekey("GET /v2/users", dict(
             GETWithParametersLisaGWhite=m.VulnerabilityInfo(
                 description="Getting Credentials",
                 type=m.VulnerabilityType.REMOTE,
@@ -374,7 +374,7 @@ nodes = {
             #     reward_string="Access denied, please use VPN",
             #     cost=1.0
             # )
-        ))
+        )))
 }
 
 global_vulnerability_library: Dict[VulnerabilityID, VulnerabilityInfo] = dict([])
