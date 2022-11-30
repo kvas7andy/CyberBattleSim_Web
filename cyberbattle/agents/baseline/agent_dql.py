@@ -119,17 +119,17 @@ class CyberBattleStateActionModel:
                 node_id = wrapped_env.find_external_index(vuln_id[0])
                 if node_id:
                     gym_action["remote_vulnerability"][1] = node_id
-                else:  # invalid remote env, no nodeid in discovered_nodes
-                    gym_action = None
+                else:  # invalid action, for remote env, no nodeid (target node) in discovered_nodes
+                    return "exploit[invalid]->explore", None, None
 
-            if not gym_action:
+            if not gym_action:  # undefined, because NN output was invlid, > n_discovered_nodes, > n_credential_cache
                 return "exploit[undefined]->explore", None, None
 
             elif wrapped_env.env.is_action_valid(gym_action, observation['action_mask']):
                 return "exploit", gym_action, source_node
-            else:
+            else:  # invalid because invalid by action_mask
                 return "exploit[invalid]->explore", None, None
-        else:
+        else:  # features input is invalid (should not be an issue)
             return "exploit[no_actor]->explore", None, None
 
 # %%
@@ -249,13 +249,14 @@ class DeepQLearnerPolicy(Learner):
                  replay_memory_size: int,
                  target_update: int,
                  batch_size: int,
-                 learning_rate: float
-                 ):
+                 learning_rate: float,
+                 train_while_exploit: bool = True):
 
         self.stateaction_model = CyberBattleStateActionModel(ep)
         self.batch_size = batch_size
         self.gamma = gamma
         self.learning_rate = learning_rate
+        self.train_while_exploit = train_while_exploit
 
         self.policy_net = DQN(ep).to(device)
         self.target_net = DQN(ep).to(device)
@@ -436,12 +437,13 @@ class DeepQLearnerPolicy(Learner):
                 actor_state=actor_state)
         else:
             # learn the failed exploit attempt in the current state
-            self.update_q_function(reward=0.0,
-                                   actor_state=actor_state,
-                                   next_actor_state=actor_state,
-                                   abstract_action=abstract_action)
+            if self.train_while_exploit:
+                self.update_q_function(reward=0.0,
+                                       actor_state=actor_state,
+                                       next_actor_state=actor_state,
+                                       abstract_action=abstract_action)
 
-            return "exploit[undefined]->explore", None, None
+            return action_style, None, None
 
     def exploit(self,
                 wrapped_env,
@@ -493,7 +495,7 @@ class DeepQLearnerPolicy(Learner):
             remaining_action_lookups.pop(remaining_candidate_index)
 
         # Otherwise on exploit you explore for Q-function
-        return "exploit[undefined]->explore", None, None
+        return action_style, None, None
 
     def stateaction_as_string(self, action_metadata) -> str:
         return ''

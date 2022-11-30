@@ -704,9 +704,12 @@ class AgentActions:
                                                         for i, n in enumerate(self.list_nodes()) if n['status'] != 'owned']
         return on_owned_nodes + on_discovered_nodes
 
-    def print_all_attacks(self) -> None:
+    def print_all_attacks(self, filename=None) -> None:
         """Pretty print list of all possible attacks from all the nodes currently owned by the attacker"""
-        display(pd.DataFrame.from_dict(self.list_all_attacks()).set_index('id'))  # type: ignore
+        df = pd.DataFrame.from_dict(self.list_all_attacks()).set_index('id')
+        if filename:
+            df.to_csv(filename, index=False)
+        display(df)  # type: ignore
 
 
 class DefenderAgentActions:

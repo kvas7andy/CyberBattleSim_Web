@@ -233,6 +233,7 @@ nodes = {
             # GETAsIPLocal=m.VulnerabilityInfo(
             #     description="Getting documents via render",
             #     type=m.VulnerabilityType.REMOTE,
+            #     precondition=m.Precondition("username.patient"),
             #     outcome=m.ExploitFailed(),
             #     reward_string="Error: chemists only",
             #     cost=1.0

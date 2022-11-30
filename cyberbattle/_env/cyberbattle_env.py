@@ -1235,9 +1235,9 @@ class CyberBattleEnv(gym.Env):
         self.__owned_nodes_indices_cache = None
         return observation
 
-    def render_as_fig(self):
+    def render_as_fig(self, filename=None):
         debug = commandcontrol.EnvironmentDebugging(self._actuator)
-        self._actuator.print_all_attacks()
+        self._actuator.print_all_attacks(filename=filename)
 
         # plot the cumulative reward and network side by side using plotly
         fig = make_subplots(rows=1, cols=2)
@@ -1249,8 +1249,13 @@ class CyberBattleEnv(gym.Env):
         fig.update_layout(layout)
         return fig
 
-    def render(self, mode: str = 'human') -> None:
-        fig = self.render_as_fig()
+    def render(self, mode: str = 'human', filename=None) -> None:
+        csv_filename = filename
+        if '.csv' not in csv_filename:
+            csv_filename = '.'.join(filename.split('.')[:-1] + ['csv'])
+        fig = self.render_as_fig(filename=csv_filename)
+        # if filename:
+        #    fig.write_image(filename)
         fig.show(renderer=self.__renderer)
 
     def seed(self, seed: Optional[int] = None) -> None:
