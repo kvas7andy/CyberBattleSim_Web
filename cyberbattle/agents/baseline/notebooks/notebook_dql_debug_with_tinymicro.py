@@ -22,6 +22,7 @@ the DQL agent and then run it one step at a time.
 
 # %%
 import sys
+import os
 import logging
 import gym
 from cyberbattle.agents.baseline.agent_wrapper import ActionTrackingStateAugmentation, AgentWrapper, Verbosity
@@ -29,7 +30,9 @@ import cyberbattle.agents.baseline.agent_dql as dqla
 import cyberbattle.agents.baseline.agent_wrapper as w
 import cyberbattle.agents.baseline.learner as learner
 
+import pandas as pd
 import torch
+
 # torch.cuda.set_device('cuda:3')
 logging.basicConfig(stream=sys.stdout, format="%(levelname)s: %(message)s")
 LOGGER = logging.getLogger('myloggername')
@@ -39,6 +42,10 @@ LOGGER.setLevel(logging.ERROR)
 # %% {"tags": ["parameters"]}
 gymid = 'CyberBattleTinyMicro-v0'
 
+log_dir = 'logs/exper/debug'
+log_dir = os.path.join(log_dir, gymid)
+os.makedirs(log_dir, exist_ok=True)
+
 
 # %%
 # Load the gym environment
@@ -47,6 +54,7 @@ ctf_env = gym.make(gymid)
 
 iteration_count = ctf_env.spec.max_episode_steps
 training_episode_count = 50
+train_while_exploit = True
 
 ep = w.EnvironmentBounds.of_identifiers(
     maximum_node_count=12,
@@ -96,6 +104,9 @@ l = dqn_learning_run['learner']
 
 max_steps = iteration_count
 verbosity = Verbosity.Normal
+l.train_while_exploit = train_while_exploit
+l.policy_net.eval()
+
 
 # next action suggested by DQL agent
 h = []
@@ -113,16 +124,24 @@ for i in range(max_steps):
     current_o, reward, done, _ = wrapped_env.step(next_action)
     cum_reward += reward
     action_str, reward_str = wrapped_env.pretty_print_internal_action(next_action, output_reward_str=True)
-    h.append((ctf_env.get_explored_network_node_properties_bitmap_as_numpy(current_o),
-              reward,
-              (action_str + "\t action  validity: " + action_style, reward_str)))
-    if verbosity == Verbosity.Verbose or (verbosity == Verbosity.Normal and reward > 0) or not i % 10:
-        print(f"Step: {i}\t", end="")
-        # if verbosity == Verbosity.Verbose:
-        #     print(f"network_bitmap_explore: {h[-1][0]}")
-        print(f"reward:{h[-1][1]}\t cumulative reward: {cum_reward}\t next_action: {h[-1][2][0]}\t reward_string: {h[-1][2][1]}")
+    h.append((i,  # ctf_env.get_explored_network_node_properties_bitmap_as_numpy(current_o),
+              reward, cum_reward,
+              action_str, action_style, reward_str))  # "\t action  validity: " +
+    # if verbosity == Verbosity.Verbose or (verbosity == Verbosity.Normal and reward > 0) or not i % 10:
+    # print(f"Step: {i}\t", end="")
+    # if verbosity == Verbosity.Verbose:
+    #     print(f"network_bitmap_explore: {h[-1][0]}")
+    # print(f"reward:{h[-1][1]}\t cumulative reward: {cum_reward}\t next_action: {h[-1][2]}\t reward_string: {h[-1][3]}")
 
+df = pd.DataFrame(h, columns=["Step", "Reward", "Cumulative Reward", "Next action", "Processes by", "Reward string"])
+df.set_index("Step")
+print(df.to_string())
+
+os.makedirs(log_dir, exist_ok=True)
+df.to_csv(os.path.join(log_dir, f'exploit_train_{train_while_exploit}_{training_episode_count}_episodes_output.csv'),
+          index=False)
 print(f'len: {len(h)}, cumulative reward: {cum_reward}')
 
 # %%
-ctf_env.render()
+ctf_env.render(filename=os.path.join(log_dir,
+                                     f'exploit_train_{train_while_exploit}_{training_episode_count}_episodes_output_result.png'))
