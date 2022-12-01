@@ -55,6 +55,7 @@
     // },
     "jupyter.jupyterServerType": "local",
     "files.trimFinalNewlines": true,
+    "github-enterprise.uri": "github.wdf.sap.corp",
     // "jupyter.kernels.filter": [],
     // "search.quickOpen.includeHistory": false,
     // "search.exclude": {
