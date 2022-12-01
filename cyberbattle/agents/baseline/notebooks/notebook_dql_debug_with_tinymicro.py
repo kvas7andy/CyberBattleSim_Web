@@ -54,7 +54,7 @@ ctf_env = gym.make(gymid)
 
 iteration_count = ctf_env.spec.max_episode_steps
 training_episode_count = 50
-train_while_exploit = True
+train_while_exploit = False
 
 ep = w.EnvironmentBounds.of_identifiers(
     maximum_node_count=12,
