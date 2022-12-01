@@ -102,7 +102,7 @@ nodes = {
         services=[],  # should I leave like this?
         value=10,  # owning reward
         vulnerabilities=m.strkey_to_tuplekey("POST /v2/register", dict(
-            POSTAsAlicAnon=m.VulnerabilityInfo(  # LocalUser == registered user with SESSION token, but without privilages!
+            AsAlicAnon=m.VulnerabilityInfo(  # LocalUser == registered user with SESSION token, but without privilages!
                 description="Trap Deceptive endpoint to check",
                 type=m.VulnerabilityType.REMOTE,
                 outcome=m.LeakedProfiles(["username.patient&id.UUIDfake"]),
@@ -116,7 +116,7 @@ nodes = {
         value=0,
         vulnerabilities=m.strkey_to_tuplekey("GET /v2/calendar", dict(
             # Identify GET usage for anyuser
-            GETAsLocalUser=m.VulnerabilityInfo(
+            AsLocalUser=m.VulnerabilityInfo(
                 description="Found usernames from calendar & property",
                 precondition=m.Precondition("username.patient"),
                 type=m.VulnerabilityType.REMOTE,
@@ -147,7 +147,7 @@ nodes = {
         value=40,
         vulnerabilities=m.strkey_to_tuplekey("GET /v2/messages", dict(
             # Identify GET usage for anyuser
-            GETAsLocalUser=m.VulnerabilityInfo(
+            AsLocalUser=m.VulnerabilityInfo(
                 description="Try to get messages as fake user",
                 type=m.VulnerabilityType.REMOTE,
                 precondition=m.Precondition("username.patient"),
@@ -155,7 +155,7 @@ nodes = {
                 reward_string="Authentification required OR Error: doctors and chemists only",  # TODOMeeting is it correct?
                 cost=1.0
             ),
-            GETAsLiz=m.VulnerabilityInfo(
+            AsLiz=m.VulnerabilityInfo(
                 description="Getting messages as Liz",
                 type=m.VulnerabilityType.REMOTE,
                 precondition=m.Precondition("username.LisaGWhite&id.994D5244"),
@@ -187,7 +187,7 @@ nodes = {
             #     reward_string="No messages",
             #     cost=1.0
             # ),
-            GETAsMarioDFiles=m.VulnerabilityInfo(
+            AsMarioDFiles=m.VulnerabilityInfo(
                 description="Getting messages as Mario",
                 type=m.VulnerabilityType.REMOTE,
                 precondition=m.Precondition("username.MarioDFiles&id.F5BCFE9D"),
@@ -230,15 +230,7 @@ nodes = {
             #     reward_string="Error: chemists only",
             #     cost=1.0
             # ),
-            # GETAsIPLocal=m.VulnerabilityInfo(
-            #     description="Getting documents via render",
-            #     type=m.VulnerabilityType.REMOTE,
-            #     precondition=m.Precondition("username.patient"),
-            #     outcome=m.ExploitFailed(),
-            #     reward_string="Error: chemists only",
-            #     cost=1.0
-            # ),
-            GETAsChemist=m.VulnerabilityInfo(
+            AsChemist=m.VulnerabilityInfo(
                 description="Getting documents as Chemist",
                 type=m.VulnerabilityType.REMOTE,
                 precondition=m.Precondition("roles.isChemist"),
@@ -315,7 +307,7 @@ nodes = {
         value=100,  # owning reward
         # properties=["LisaGWhite", "MarioDFiles"],  # SO WE NEED INCLUDE all usernames into properties
         vulnerabilities=m.strkey_to_tuplekey("GET /v2/users", dict(
-            GETWithParametersLisaGWhite=m.VulnerabilityInfo(
+            WithParametersLisaGWhite=m.VulnerabilityInfo(
                 description="Getting Credentials",
                 type=m.VulnerabilityType.REMOTE,
                 precondition=m.Precondition("username.LisaGWhite"),
@@ -331,7 +323,7 @@ nodes = {
             #     reward_string="Globally Available Session ID and username for DorisHDunn",
             #     cost=1.0
             # ),
-            GETWithParametersMarioDfiles=m.VulnerabilityInfo(
+            WithParametersMarioDfiles=m.VulnerabilityInfo(
                 description="Getting Credentials",
                 type=m.VulnerabilityType.REMOTE,
                 precondition=m.Precondition("username.MarioDFiles"),
@@ -339,7 +331,7 @@ nodes = {
                 reward_string="Globally Available Session ID and username for MarioDFiles",
                 cost=1.0
             ),
-            # GETWithParametersMagdaleneJBreen=m.VulnerabilityInfo(
+            # WithParametersMagdaleneJBreen=m.VulnerabilityInfo(
             #     description="Getting Credentials",
             #     type=m.VulnerabilityType.REMOTE,
             #     precondition=m.Precondition("username.MagdaleneJBreen"),
@@ -347,7 +339,7 @@ nodes = {
             #     reward_string="Globally Available Session ID, username for MagdaleneJBreen, roles and IP of profile",
             #     cost=1.0
             # ),
-            # GETWithParametersJanJCovington=m.VulnerabilityInfo(
+            # WithParametersJanJCovington=m.VulnerabilityInfo(
             #     description="Getting Credentials",
             #     type=m.VulnerabilityType.REMOTE,
             #     precondition=m.Precondition("username.JanJCovington"),
@@ -355,7 +347,7 @@ nodes = {
             #     reward_string="Globally Available Session ID, username for JanJCovington, roles and IP of profile",
             #     cost=1.0
             # ),
-            GETAsIPLocal=m.VulnerabilityInfo(
+            AsIPLocal=m.VulnerabilityInfo(
                 description="Getting Credentials",
                 type=m.VulnerabilityType.REMOTE,
                 precondition=m.Precondition("ip.local"),
@@ -368,7 +360,7 @@ nodes = {
                 reward_string="All available profiles",
                 cost=1.0
             ),
-            # GETAsLocalUser=m.VulnerabilityInfo(
+            # AsLocalUser=m.VulnerabilityInfo(
             #     description="Getting Credentials",
             #     type=m.VulnerabilityType.REMOTE,
             #     outcome=m.ExploitFailed(),  # special cost like antireward
