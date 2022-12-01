@@ -7,10 +7,13 @@
 [core]
     whitespace = cr-at-eol,-trailing-space
 [credential]
-	helper = "!f() { /root/.vscode-server/bin/64bbfbf67ada9953918d72e1df2f4d8e537d340e/node /tmp/vscode-remote-containers-801df6fc9afb8cda321fecda77536550ab844a30.js $*; }; f"
+	helper = "!f() { /root/.vscode-server/bin/6261075646f055b99068d3688932416f2346dd3b/node /tmp/vscode-remote-containers-8698d174dce6f0b36d3ea6d7800823398043e9ad.js $*; }; f"
 [user]
 	email = andrei.kvasov.dl@gmail.com
 	name = Andrei Kvasov
+[remote "origin"]
+        url = git@github.wdf.sap.corp:sundew/CyberBattleSim_sundew.git
+        fetch = +refs/heads/*:refs/remotes/origin/*
 [branch "main"]
         remote = origin
         merge = refs/heads/main
