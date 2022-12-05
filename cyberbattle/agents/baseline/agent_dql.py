@@ -27,6 +27,7 @@ from cyberbattle._env import cyberbattle_env
 import numpy as np
 from typing import List, NamedTuple, Optional, Tuple, Union
 import random
+import logging
 
 # deep learning packages
 from torch import Tensor
@@ -43,6 +44,7 @@ import cyberbattle.agents.baseline.agent_wrapper as w
 from .agent_randomcredlookup import CredentialCacheExploiter
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+LOGGER = logging.getLogger("agent_dql")
 
 
 class CyberBattleStateActionModel:
@@ -120,6 +122,7 @@ class CyberBattleStateActionModel:
                 if node_id:
                     gym_action["remote_vulnerability"][1] = node_id
                 else:  # invalid action, for remote env, no nodeid (target node) in discovered_nodes
+                    logging.warn(f"Action_style exploit[invalid]->explore, Gym action {wrapped_env.pretty_print_internal_action(gym_action)}")
                     return "exploit[invalid]->explore", None, None
 
             if not gym_action:  # undefined, because NN output was invlid, > n_discovered_nodes, > n_credential_cache
@@ -128,6 +131,7 @@ class CyberBattleStateActionModel:
             elif wrapped_env.env.is_action_valid(gym_action, observation['action_mask']):
                 return "exploit", gym_action, source_node
             else:  # invalid because invalid by action_mask
+                logging.warn(f" Action_style exploit[invalid]->explore, Gym action {wrapped_env.pretty_print_internal_action(gym_action)}")
                 return "exploit[invalid]->explore", None, None
         else:  # features input is invalid (should not be an issue)
             return "exploit[no_actor]->explore", None, None

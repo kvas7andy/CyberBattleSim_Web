@@ -37,7 +37,8 @@ nodes = {
                 description="Website HTML contains script with rules of username configuration",
                 type=m.VulnerabilityType.LOCAL,
                 precondition=m.Precondition("script_block"),
-                outcome=m.LeakedNodesId(["GET /v2/users"]),
+                outcome=m.get_dynamical_class((m.LeakedNodesId, m.CustomerData))(
+                    nodes=["GET /v2/users"], reward=20),  # m.LeakedNodesId(["GET /v2/users"]),
                 # Not OWNED, need to make connect_to_remote with any credentials to make them owned and include all their properties
                 reward_string="Found script with rules of username creation from POST /register => access to GET /v2/users",
                 cost=1.0
@@ -191,7 +192,7 @@ nodes = {
                 description="Getting messages as Mario",
                 type=m.VulnerabilityType.REMOTE,
                 precondition=m.Precondition("username.MarioDFiles&id.F5BCFE9D"),
-                outcome=m.LeakedProfiles(["ip.local", "username.MagdaleneJBreen"]),
+                outcome=m.LeakedProfiles(["ip.local", "username.MagdaleneJBreen"]),  # m.get_dynamical_class((m.LeakedNodesId, m.LeakedProfiles))(discovered_profiles=["ip.local", "username.MagdaleneJBreen"], nodes=["GET /v2/render"]),
                 reward_string="Found another username MagdaleneJBreen + render with local access to other studd",
                 cost=1.0
             ),
@@ -245,7 +246,7 @@ nodes = {
     #     services=[],
     #     value=0,
     #     properties=["ip_local"],
-    #     vulnerabilities=dict(
+    #     vulnerabilities=m.strkey_to_tuplekey("GET /v2/render", dict(
     #         # Identify GET usage for anyuser
     #         GETAsLocalUser=m.VulnerabilityInfo(
     #             description="Trying to get /v2/render",
@@ -254,7 +255,9 @@ nodes = {
     #             outcome=m.ExploitFailed(5),
     #             reward_string="Cannot get /render",
     #             cost=1.0
-    #         ),
+    #         )
+    #     )),
+    # ),
     #         GETAsDocument=m.VulnerabilityInfo(
     #             description="/render/http%3A%2F%2F127.0.0.1%3A8081%2Fdocuments%2Fa5db38da-156a-4d00-a041-9702db349ca5",
     #             type=m.VulnerabilityType.REMOTE,

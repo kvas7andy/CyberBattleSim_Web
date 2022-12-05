@@ -34,14 +34,14 @@ import pandas as pd
 import torch
 
 # torch.cuda.set_device('cuda:3')
-logging.basicConfig(stream=sys.stdout, format="%(levelname)s: %(message)s")
-LOGGER = logging.getLogger('myloggername')
-LOGGER.setLevel(logging.ERROR)
+log_level_dict = {"info": logging.INFO, "error": logging.ERROR, "debug": logging.DEBUG, "warn": logging.WARN, }
+logging.basicConfig(stream=sys.stdout, level=log_level_dict[os.environ["LOG_LEVEL"]], format="%(levelname)s: %(message)s")
+LOGGER = logging.getLogger('agent_dql')
+# LOGGER.setLevel(logging.ERROR)
 
 
 # %% {"tags": ["parameters"]}
 gymid = 'CyberBattleTinyMicro-v0'
-
 log_dir = 'logs/exper/debug'
 log_dir = os.path.join(log_dir, gymid)
 os.makedirs(log_dir, exist_ok=True)
@@ -92,8 +92,7 @@ dqn_learning_run = learner.epsilon_greedy_search(
 # %%
 # initialize the environment
 
-LOGGER.setLevel(logging.INFO)
-LOGGER.info("Now evaluate trained network")
+logging.info("Now evaluate trained network")
 
 current_o = ctf_env.reset()
 wrapped_env = AgentWrapper(ctf_env, ActionTrackingStateAugmentation(ep, current_o))
@@ -107,6 +106,7 @@ verbosity = Verbosity.Normal
 l.train_while_exploit = train_while_exploit
 l.policy_net.eval()
 
+log_results = os.environ["LOG_RESULTS"]
 
 # next action suggested by DQL agent
 h = []
@@ -119,7 +119,7 @@ for i in range(max_steps):
     action_style, next_action, _ = l.exploit(wrapped_env, current_o)
 
     if next_action is None:
-        print("Next aciton == None, returned with aciton_style: ", action_style)
+        print("Next action == None, returned with aciton_style: ", action_style)
         break
     current_o, reward, done, _ = wrapped_env.step(next_action)
     cum_reward += reward
@@ -137,11 +137,12 @@ df = pd.DataFrame(h, columns=["Step", "Reward", "Cumulative Reward", "Next actio
 df.set_index("Step")
 print(df.to_string())
 
-os.makedirs(log_dir, exist_ok=True)
-df.to_csv(os.path.join(log_dir, f'exploit_train_{train_while_exploit}_{training_episode_count}_episodes_output.csv'),
-          index=False)
+if log_results:
+    os.makedirs(log_dir, exist_ok=True)
+    df.to_csv(os.path.join(log_dir, f'exploit_train_{train_while_exploit}_{training_episode_count}_episodes_output.csv'),
+              index=False)
 print(f'len: {len(h)}, cumulative reward: {cum_reward}')
 
 # %%
-ctf_env.render(filename=os.path.join(log_dir,
-                                     f'exploit_train_{train_while_exploit}_{training_episode_count}_episodes_output_result.png'))
+ctf_env.render(filename=None if not log_results else
+               os.path.join(log_dir, f'exploit_train_{train_while_exploit}_{training_episode_count}_episodes_output_result.png'))
