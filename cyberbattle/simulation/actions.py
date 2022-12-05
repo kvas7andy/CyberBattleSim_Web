@@ -354,7 +354,7 @@ class AgentActions:
                           ) -> Tuple[bool, ActionResult]:
 
         if node_info.status != model.MachineStatus.Running:
-            logger.info("target machine not in running state")
+            logger.warn("target machine not in running state")
             return False, ActionResult(reward=Penalty.MACHINE_NOT_RUNNING,
                                        outcome=None)
 
@@ -369,7 +369,7 @@ class AgentActions:
             if throw_if_vulnerability_not_present:
                 raise ValueError(f"Vulnerability '{vulnerability_id}' not supported by node='{node_id}'")
             else:
-                logger.info("Vulnerability '{}' not supported by node '{}'".format(vulnerability_id, node_id))
+                logger.warn("Vulnerability '{}' not supported by node '{}'".format(vulnerability_id, node_id))
                 return False, ActionResult(reward=Penalty.SUPSPICIOUSNESS, outcome=None)
 
         vulnerability = vulnerabilities[vulnerability_id]
@@ -384,13 +384,13 @@ class AgentActions:
 
         if not self._check_discovered_profiless(self._gathered_profiles, vulnerability):
             reward += Penalty.FAILED_REMOTE_EXPLOIT
-            logger.info("Failed exploit with reward {}: {}".format(reward, vulnerability.reward_string))
+            logger.warn("Failed exploit {} on node {} with r={}: {}".format(vulnerability_id[1], node_id, reward, vulnerability.reward_string))
             return False, ActionResult(reward=reward, outcome=model.ExploitFailed())
 
         # check vulnerability prerequisites
         if isinstance(outcome, model.ExploitFailed) or not self._check_prerequisites(node_id, vulnerability):
             reward += failed_penalty
-            logger.info("Failed exploit with reward {}: {}".format(reward, vulnerability.reward_string))
+            logger.warn("Failed exploit {} on node {} with r={}: {}".format(vulnerability_id[1], node_id, reward, vulnerability.reward_string))
             return False, ActionResult(reward=reward, outcome=model.ExploitFailed())
 
         # if the vulnerability type is a privilege escalation
@@ -435,6 +435,8 @@ class AgentActions:
             last_time = self._discovered_nodes[node_id].last_attack[lookup_key]
             if node_info.last_reimaging is None or last_time >= node_info.last_reimaging:
                 reward = Penalty.REPEAT - vulnerability.cost
+                logger.warn("Repeated action {} on node {} r={}: {}".format(vulnerability_id[1], node_id, reward, vulnerability.reward_string))
+                return False, ActionResult(reward=reward, outcome=outcome)
         else:
             reward += NEW_SUCCESSFULL_ATTACK_REWARD
 
@@ -448,7 +450,7 @@ class AgentActions:
         reward += newly_discovered_credentials * CREDENTIAL_DISCOVERED_REWARD
         reward + newly_discovered_profiles * PROFILE_DISCOVERED_REWARD
 
-        logger.info("GOT REWARD {}: {}".format(reward, vulnerability.reward_string))
+        logger.info("GOT REWARD {} with action {} on node {}: {}".format(reward, vulnerability_id[1], node_id, vulnerability.reward_string))
         return True, ActionResult(reward=reward, outcome=outcome)
 
     def exploit_remote_vulnerability(self,

@@ -144,6 +144,25 @@ def escalate(current_level, escalation_level: PrivilegeLevel) -> PrivilegeLevel:
     return PrivilegeLevel(max(int(current_level), int(escalation_level)))
 
 
+class Memoize:
+    def __init__(self, f):
+        self.f = f
+        self.memo = {}
+
+    def __call__(self, *args):
+        return self.memo.setdefault(args, self.f(*args))
+
+
+@Memoize
+def get_dynamical_class(base):
+
+    class DynamicalClass(*base):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+
+    return DynamicalClass
+
+
 class VulnerabilityOutcome:
     """Outcome of exploiting a given vulnerability"""
 
@@ -152,11 +171,16 @@ class LateralMove(VulnerabilityOutcome):
     """Lateral movement to the target node"""
     success: bool
 
+    def __init__(self, success: PrivilegeLevel = False, **kwargs):
+        super().__init__(**kwargs)
+        self.success = success
+
 
 class CustomerData(VulnerabilityOutcome):
     """Access customer data on target node"""
 
-    def __init__(self, reward: float = 0.0, ctf_flag: bool = False):
+    def __init__(self, reward: float = 0.0, ctf_flag: bool = False, **kwargs):
+        super().__init__(**kwargs)
         self.reward = reward
         self.ctf_flag = ctf_flag
 
@@ -164,7 +188,8 @@ class CustomerData(VulnerabilityOutcome):
 class PrivilegeEscalation(VulnerabilityOutcome):
     """Privilege escalation outcome"""
 
-    def __init__(self, level: PrivilegeLevel):
+    def __init__(self, level: PrivilegeLevel, **kwargs):
+        super().__init__(**kwargs)
         self.level = level
 
     @property
@@ -177,39 +202,45 @@ class PrivilegeEscalation(VulnerabilityOutcome):
 class SystemEscalation(PrivilegeEscalation):
     """Escalation to SYSTEM privileges"""
 
-    def __init__(self):
-        super().__init__(PrivilegeLevel.System)
+    def __init__(self, **kwargs):
+        super().__init__(PrivilegeLevel.System, **kwargs)
 
 
 class AdminEscalation(PrivilegeEscalation):
     """Escalation to local administrator privileges"""
 
-    def __init__(self):
-        super().__init__(PrivilegeLevel.Admin)
+    def __init__(self, **kwargs):
+        super().__init__(PrivilegeLevel.Admin, **kwargs)
 
 
 class ProbeSucceeded(VulnerabilityOutcome):
     """Probing succeeded"""
 
-    def __init__(self, discovered_properties: List[PropertyName]):
+    def __init__(self, discovered_properties: List[PropertyName], **kwargs):
+        super().__init__(**kwargs)
         self.discovered_properties = discovered_properties
 
 
 class LeakedProfiles(VulnerabilityOutcome):
     """Probing succeeded"""
 
-    def __init__(self, discovered_profiles: List[Profile]):
+    def __init__(self, discovered_profiles: List[Profile], **kwargs):
+        super().__init__(**kwargs)
         self.discovered_profiles = discovered_profiles
 
 
 class ProbeFailed(VulnerabilityOutcome):
     """Probing failed"""
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
 
 class ExploitFailed(VulnerabilityOutcome):
     """This is for situations where the exploit fails """
 
-    def __init__(self, cost: float = 0.0, deception=False):
+    def __init__(self, cost: float = 0.0, deception=False, **kwargs):
+        super().__init__(**kwargs)
         self.cost = cost
         self.deception = deception
 
@@ -226,14 +257,16 @@ class LeakedCredentials(VulnerabilityOutcome):
 
     credentials: List[CachedCredential]
 
-    def __init__(self, credentials: List[CachedCredential]):
+    def __init__(self, credentials: List[CachedCredential], **kwargs):
+        super().__init__(**kwargs)
         self.credentials = credentials
 
 
 class LeakedNodesId(VulnerabilityOutcome):
     """A set of node IDs obtained by exploiting a vulnerability"""
 
-    def __init__(self, nodes: List[NodeID]):
+    def __init__(self, nodes: List[NodeID], **kwargs):
+        super().__init__(**kwargs)
         self.nodes = nodes
 
 
