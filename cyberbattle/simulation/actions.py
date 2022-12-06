@@ -14,6 +14,7 @@ from datetime import time
 from boolean import boolean
 from collections import OrderedDict
 import logging
+import sys
 from enum import Enum
 from typing import Iterator, List, NamedTuple, Optional, Set, Tuple, Dict, TypedDict, cast
 from IPython.display import display
@@ -141,8 +142,8 @@ class AgentActions:
         for node_id in self._discovered_nodes:
             yield (node_id, self._environment.get_node(node_id))
 
-    def _check_discovered_profiless(self, profiles: List[model.Profile], vulnerability: model.VulnerabilityInfo) -> bool:
-        expr = vulnerability.precondition.expression
+    def _check_discovered_profiles(self, profiles: List[model.Profile], precondition: model.Precondition) -> bool:
+        expr = precondition.expression
         expr_profile_symbols = [i for i in expr.get_symbols() if '.' in str(i)]
         if not len(profiles):
             return len(expr_profile_symbols) == 0
@@ -159,7 +160,20 @@ class AgentActions:
                 break
         return is_true
 
-    def _check_prerequisites(self, target: model.NodeID, vulnerability: model.VulnerabilityInfo) -> bool:
+    def _check_discovered_profile(self, profile: model.Profile, vulnerability: model.VulnerabilityInfo) -> bool:
+        expr = vulnerability.precondition.expression
+        expr_profile_symbols = [i for i in expr.get_symbols() if '.' in str(i)]
+
+        profile_symbols = ALGEBRA.parse(str(profile)).get_symbols()
+
+        true_value = ALGEBRA.parse('true')
+        false_value = ALGEBRA.parse('false')
+        mapping = {i: true_value if i in profile_symbols or '.' not in str(i) else false_value
+                   for i in expr.get_symbols()}
+        is_true: bool = cast(boolean.Expression, expr.subs(mapping)).simplify() == true_value
+        return is_true
+
+    def _check_prerequisites(self, target: model.NodeID, precondition: model.Precondition) -> bool:
         """
         This is a quick helper function to check the prerequisites to see if
         they match the ones supplied.
@@ -167,11 +181,11 @@ class AgentActions:
         node: model.NodeInfo = self._environment.network.nodes[target]['data']
 
         node_flags = node.properties  # self.get_discovered_properties(target)  # node.properties
-        expr = vulnerability.precondition.expression
+        expr = precondition.expression
 
         # # TODO check which can be ommitted if switch action was before thus we need to check only CURRENT_PROFILE
         #
-        #     if self._check_discovered_profiless(self._gathered_profiles, vulnerability):
+        #     if self._check_discovered_profiles(self._gathered_profiles, vulnerability.precondition):
         #         break
 
         true_value = ALGEBRA.parse('true')
@@ -200,14 +214,12 @@ class AgentActions:
             vuln_id
             for vuln_id, vulnerability in self._environment.vulnerability_library.items()
             if (type_filter is None or vulnerability.type == type_filter)
-            and self._check_prerequisites(target, vulnerability)
         }
 
         local_vuln: Set[model.VulnerabilityID] = {
             vuln_id
             for vuln_id, vulnerability in target_node_data.vulnerabilities.items()
             if (type_filter is None or vulnerability.type == type_filter)
-            and self._check_prerequisites(target, vulnerability)
         }
 
         return list(global_vuln.union(local_vuln))
@@ -375,6 +387,7 @@ class AgentActions:
         vulnerability = vulnerabilities[vulnerability_id]
 
         outcome = vulnerability.outcome
+        precondition = vulnerability.precondition
 
         if vulnerability.type != expected_type:
             raise ValueError(f"vulnerability id '{vulnerability_id}' is for an attack of type {vulnerability.type}, expecting: {expected_type}")
@@ -382,76 +395,107 @@ class AgentActions:
         reward = 0
         reward -= vulnerability.cost
 
-        if not self._check_discovered_profiless(self._gathered_profiles, vulnerability):
-            reward += Penalty.FAILED_REMOTE_EXPLOIT
-            logger.warn("Failed exploit {} on node {} with r={}: {}".format(vulnerability_id[1], node_id, reward, vulnerability.reward_string))
-            return False, ActionResult(reward=reward, outcome=model.ExploitFailed())
+        max_reward, max_outcome = -sys.float_info.max, None
+        repeat = False
 
-        # check vulnerability prerequisites
-        if isinstance(outcome, model.ExploitFailed) or not self._check_prerequisites(node_id, vulnerability):
-            reward += failed_penalty
-            logger.warn("Failed exploit {} on node {} with r={}: {}".format(vulnerability_id[1], node_id, reward, vulnerability.reward_string))
-            return False, ActionResult(reward=reward, outcome=model.ExploitFailed())
+        precond_ind_outcome_iter = iter(zip(precondition, range(len(precondition)), outcome)) if isinstance(precondition, list) else iter(zip([precondition], range(1), [outcome]))
 
-        # if the vulnerability type is a privilege escalation
-        # and if the escalation level is not already reached on that node,
-        # then add the escalation tag to the node properties
-        if isinstance(outcome, model.PrivilegeEscalation):
-            if outcome.tag in node_info.properties:
-                return False, ActionResult(reward=Penalty.REPEAT, outcome=outcome)
+        for precondition, precondition_index, outcome in precond_ind_outcome_iter:
+            if isinstance(outcome, model.ExploitFailed) or not self._check_discovered_profiles(self._gathered_profiles, precondition):
+                reward += Penalty.FAILED_REMOTE_EXPLOIT
+                if max_reward < reward:
+                    max_reward = reward
+                    max_outcome = model.ExploitFailed()
+                    repeat = False
+                continue
 
-            last_owned_at, is_currently_owned = self.__mark_node_as_owned(node_id, outcome.level)
+            # check vulnerability prerequisites
+            if not self._check_prerequisites(node_id, precondition):
+                reward += failed_penalty
+                if max_reward < reward:
+                    max_reward = reward
+                    max_outcome = model.ExploitFailed()
+                    repeat = False
+                continue
 
-            if not last_owned_at:
-                reward += float(node_info.value)
+            # if the vulnerability type is a privilege escalation
+            # and if the escalation level is not already reached on that node,
+            # then add the escalation tag to the node properties
+            if isinstance(outcome, model.PrivilegeEscalation):
+                if outcome.tag in node_info.properties:
+                    reward += Penalty.REPEAT
+                    if max_reward < reward:
+                        max_reward = reward
+                        max_outcome = outcome
+                        repeat = True
+                    continue
 
-            node_info.properties.append(outcome.tag)
+                last_owned_at, is_currently_owned = self.__mark_node_as_owned(node_id, outcome.level)
 
-        elif isinstance(outcome, model.LateralMove):
-            last_owned_at, is_currently_owned = self.__mark_node_as_owned(node_id)
+                if not last_owned_at:
+                    reward += float(node_info.value)
 
-            if not last_owned_at:
-                reward += float(node_info.value)
+                node_info.properties.append(outcome.tag)
 
-        elif isinstance(outcome, model.ProbeSucceeded):
-            for p in outcome.discovered_properties:
-                assert p in node_info.properties, \
-                    f'Discovered property {p} must belong to the set of properties associated with the node.'
+            elif isinstance(outcome, model.LateralMove):
+                last_owned_at, is_currently_owned = self.__mark_node_as_owned(node_id)
 
-            newly_discovered_properties = self.__mark_nodeproperties_as_discovered(node_id, outcome.discovered_properties)
-            reward += newly_discovered_properties * PROPERTY_DISCOVERED_REWARD
+                if not last_owned_at:
+                    reward += float(node_info.value)
 
-        elif isinstance(outcome, model.CustomerData):
-            reward += outcome.reward
+            elif isinstance(outcome, model.ProbeSucceeded):
+                for p in outcome.discovered_properties:
+                    assert p in node_info.properties, \
+                        f'Discovered property {p} must belong to the set of properties associated with the node.'
 
-        if node_id not in self._discovered_nodes:
-            self._discovered_nodes[node_id] = NodeTrackingInformation()
+                newly_discovered_properties = self.__mark_nodeproperties_as_discovered(node_id, outcome.discovered_properties)
+                reward += newly_discovered_properties * PROPERTY_DISCOVERED_REWARD
 
-        lookup_key = (vulnerability_id, local_or_remote)
+            elif isinstance(outcome, model.CustomerData):
+                reward += outcome.reward
 
-        already_executed = lookup_key in self._discovered_nodes[node_id].last_attack
+            if node_id not in self._discovered_nodes:
+                self._discovered_nodes[node_id] = NodeTrackingInformation()
 
-        if already_executed:
-            last_time = self._discovered_nodes[node_id].last_attack[lookup_key]
-            if node_info.last_reimaging is None or last_time >= node_info.last_reimaging:
-                reward = Penalty.REPEAT - vulnerability.cost
-                logger.warn("Repeated action {} on node {} r={}: {}".format(vulnerability_id[1], node_id, reward, vulnerability.reward_string))
-                return False, ActionResult(reward=reward, outcome=outcome)
-        else:
-            reward += NEW_SUCCESSFULL_ATTACK_REWARD
+            lookup_key = (vulnerability_id, local_or_remote, outcome)
 
-        self._discovered_nodes[node_id].last_attack[lookup_key] = time()
+            already_executed = lookup_key in self._discovered_nodes[node_id].last_attack
 
-        newly_discovered_nodes, discovered_nodes_value, newly_discovered_credentials, newly_discovered_profiles = self.__mark_discovered_entities(node_id, outcome)
+            if already_executed:
+                last_time = self._discovered_nodes[node_id].last_attack[lookup_key]
+                if node_info.last_reimaging is None or last_time >= node_info.last_reimaging:
+                    reward = Penalty.REPEAT - vulnerability.cost
+                    if max_reward < reward:
+                        max_reward = reward
+                        max_outcome = outcome
+                        repeat = True
+                    continue
+            else:
+                reward += NEW_SUCCESSFULL_ATTACK_REWARD
 
-        # Note: `discovered_nodes_value` should not be added to the reward
-        # unless the discovered nodes got owned, but this case is already covered above
-        reward += newly_discovered_nodes * NODE_DISCOVERED_REWARD
-        reward += newly_discovered_credentials * CREDENTIAL_DISCOVERED_REWARD
-        reward + newly_discovered_profiles * PROFILE_DISCOVERED_REWARD
+            self._discovered_nodes[node_id].last_attack[lookup_key] = time()
+
+            newly_discovered_nodes, discovered_nodes_value, newly_discovered_credentials, newly_discovered_profiles = self.__mark_discovered_entities(node_id, outcome)
+
+            # Note: `discovered_nodes_value` should not be added to the reward
+            # unless the discovered nodes got owned, but this case is already covered above
+            reward += newly_discovered_nodes * NODE_DISCOVERED_REWARD
+            reward += newly_discovered_credentials * CREDENTIAL_DISCOVERED_REWARD
+            reward + newly_discovered_profiles * PROFILE_DISCOVERED_REWARD
+
+            max_reward = reward
+            max_outcome = outcome
+            repeat = False
+
+        if max_reward <= 0:
+            if repeat:
+                logger.warn("Repeated action {} on node {} r={}: {}".format(vulnerability_id[1], node_id, max_reward, vulnerability.reward_string))
+            else:
+                logger.warn("Failed exploit {} on node {} with r={}: {}".format(vulnerability_id[1], node_id, max_reward, vulnerability.reward_string))
+            return False, ActionResult(reward=max_reward, outcome=max_outcome)
 
         logger.info("GOT REWARD {} with action {} on node {}: {}".format(reward, vulnerability_id[1], node_id, vulnerability.reward_string))
-        return True, ActionResult(reward=reward, outcome=outcome)
+        return True, ActionResult(reward=max_reward, outcome=max_outcome)
 
     def exploit_remote_vulnerability(self,
                                      node_id: model.NodeID,

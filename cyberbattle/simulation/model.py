@@ -549,11 +549,14 @@ def collect_ports_from_nodes(
 
 def collect_profileusernames_from_vuln(vuln: VulnerabilityInfo) -> List[str]:
     """Returns all the port named referenced in a given vulnerability"""
+    outcome_precond_iter = iter(zip(vuln.outcome, vuln.precondition)) if isinstance(vuln.outcome, list) else iter(zip([vuln.outcome], [vuln.precondition]))
+
     profile_usernames = []
-    # TODO change split('&') to more meaningfull because of precondition, can have other symbols like |
-    if isinstance(vuln.outcome, LeakedProfiles):
-        profile_usernames += [symbol_str.split('.')[1] for profile_str in vuln.outcome.discovered_profiles for symbol_str in profile_str.split('&') if 'username.' in symbol_str]
-    profile_usernames += [str(symbol).split('.')[1] for symbol in vuln.precondition.expression.get_symbols() if 'username.' in str(symbol)]
+    for outcome, precondition in outcome_precond_iter:
+        # TODO change split('&') to more meaningfull because of precondition, can have other symbols like |
+        if isinstance(outcome, LeakedProfiles):
+            profile_usernames += [symbol_str.split('.')[1] for profile_str in outcome.discovered_profiles for symbol_str in profile_str.split('&') if 'username.' in symbol_str]
+        profile_usernames += [str(symbol).split('.')[1] for symbol in precondition.expression.get_symbols() if 'username.' in str(symbol)]
     return profile_usernames
 
 

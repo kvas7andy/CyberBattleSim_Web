@@ -37,8 +37,8 @@ nodes = {
                 description="Website HTML contains script with rules of username configuration",
                 type=m.VulnerabilityType.LOCAL,
                 precondition=m.Precondition("script_block"),
-                outcome=m.get_dynamical_class((m.LeakedNodesId, m.CustomerData))(
-                    nodes=["GET /v2/users"], reward=20),  # m.LeakedNodesId(["GET /v2/users"]),
+                outcome=m.LeakedNodesId(["GET /v2/users"]),  # m.get_dynamical_class((m.LeakedNodesId, m.CustomerData))(
+                # nodes=["GET /v2/users"], reward=20),  # m.LeakedNodesId(["GET /v2/users"]), #
                 # Not OWNED, need to make connect_to_remote with any credentials to make them owned and include all their properties
                 reward_string="Found script with rules of username creation from POST /register => access to GET /v2/users",
                 cost=1.0
@@ -159,8 +159,8 @@ nodes = {
             AsLiz=m.VulnerabilityInfo(
                 description="Getting messages as Liz",
                 type=m.VulnerabilityType.REMOTE,
-                precondition=m.Precondition("username.LisaGWhite&id.994D5244"),
-                outcome=m.LeakedProfiles(["username.MarioDFiles"]),
+                precondition=[m.Precondition("username.patient"), m.Precondition("username.LisaGWhite&id.994D5244")],
+                outcome=[m.ExploitFailed(), m.LeakedProfiles(["username.MarioDFiles"])],
                 reward_string="Found message to another user via link with MarioDFiles",
                 cost=1.0
             ),
