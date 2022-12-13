@@ -44,7 +44,7 @@ import cyberbattle.agents.baseline.agent_wrapper as w
 from .agent_randomcredlookup import CredentialCacheExploiter
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-LOGGER = logging.getLogger("agent_dql")
+LOGGER = logging.getLogger("__name__")
 
 
 class CyberBattleStateActionModel:
@@ -116,22 +116,23 @@ class CyberBattleStateActionModel:
                 source_node, observation, np.int32(abstract_action))
 
             # When target node is chosen randomly in specialize_to_gymaction, we relink target_node to the target_node vrom vulnerability, using its VulnerabilityID = ("target_node","vuln_id")
-            if gym_action and "remote_vulnerability" in gym_action.keys():
-                vuln_id = wrapped_env.identifiers.remote_vulnerabilities[gym_action["remote_vulnerability"][2]]
-                node_id = wrapped_env.find_external_index(vuln_id[0])
-                if node_id:
-                    gym_action["remote_vulnerability"][1] = node_id
-                else:  # invalid action, for remote env, no nodeid (target node) in discovered_nodes
-                    logging.warn(f"Action_style exploit[invalid]->explore, Gym action {wrapped_env.pretty_print_internal_action(gym_action)}")
-                    return "exploit[invalid]->explore", None, None
+            # if gym_action and "remote_vulnerability" in gym_action.keys():
+            #     vuln_id = wrapped_env.identifiers.remote_vulnerabilities[gym_action["remote_vulnerability"][2]]
+            #     node_id = wrapped_env.find_external_index(vuln_id[0])
+            #     if node_id:
+            #         gym_action["remote_vulnerability"][1] = node_id
+            #     else:  # invalid action, for remote env, no nodeid (target node) in discovered_nodes
+            #         logging.warn(f"Action_style exploit[invalid]->explore, Gym action {wrapped_env.internal_action_to_pretty_print(gym_action)}")
+            #         return "exploit[invalid]->explore", None, None
 
             if not gym_action:  # undefined, because NN output was invlid, > n_discovered_nodes, > n_credential_cache
+                LOGGER.warn(f"Output from NN is MISSING!")
                 return "exploit[undefined]->explore", None, None
 
             elif wrapped_env.env.is_action_valid(gym_action, observation['action_mask']):
                 return "exploit", gym_action, source_node
             else:  # invalid because invalid by action_mask
-                logging.warn(f" Action_style exploit[invalid]->explore, Gym action {wrapped_env.pretty_print_internal_action(gym_action)}")
+                LOGGER.warn(f"Output from NN is INVALID!\n\tAction_style exploit[invalid]->explore, Gym action {wrapped_env.internal_action_to_pretty_print(gym_action)}")
                 return "exploit[invalid]->explore", None, None
         else:  # features input is invalid (should not be an issue)
             return "exploit[no_actor]->explore", None, None

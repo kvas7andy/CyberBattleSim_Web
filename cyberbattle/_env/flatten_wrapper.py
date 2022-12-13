@@ -109,6 +109,12 @@ class FlattenActionWrapper(ActionWrapper):
             # target  node
             env.bounds.maximum_node_count,
 
+            # # profiles
+            # env.bounds.maximum_profiles_count,
+
+            # # variables of each vulnerability
+            # env.bounds.maximum_vulnerability_variables,
+
             # target port (for connect action only)
             env.bounds.port_count,
 
@@ -126,9 +132,17 @@ class FlattenActionWrapper(ActionWrapper):
         if action_type < self.env.bounds.local_attacks_count:
             return {'local_vulnerability': np.array([action[1], action_type])}
 
-        action_type -= self.env.bounds.local_attacks_count
+        action_type -= self.env.bounds.local_attacks_count  # action_type < env.bounds.remote_attacks_count
         if action_type < self.env.bounds.remote_attacks_count:
-            return {'remote_vulnerability': np.array([action[1], action[2], action_type])}
+            target_node = action_type // self.env.bounds.maximum_node_count
+            action_type = action_type % self.env.bounds.maximum_node_count
+            profile_ind = action_type // self.env.bounds.maximum_profiles_count
+            variable_ind = action_type % self.env.bounds.maximum_profiles_count
+
+            return {'remote_vulnerability': np.array([action[1],
+                                                      target_node,
+                                                      profile_ind,
+                                                      variable_ind])}
 
         raise NotSupportedError(f'Unsupported action: {action}')
 

@@ -28,7 +28,7 @@ def run_random_agent(episode_count: int, iteration_count: int, gym_env: cyberbat
             total_reward += reward
 
             if reward > 0:
-                prettry_printed = gym_env.pretty_print_internal_action(action)
+                prettry_printed = gym_env.internal_action_to_pretty_print(action)
                 print(f'+ rewarded action: {action} total_reward={total_reward} reward={reward} @t={t}\n  {prettry_printed}')
                 gym_env.render()
 
