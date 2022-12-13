@@ -25,7 +25,7 @@ formally defined by:
 """
 
 from datetime import datetime, time
-from typing import NamedTuple, List, Dict, Optional, Union, Tuple, Iterator, Set, get_type_hints
+from typing import NamedTuple, List, Dict, OrderedDict, Optional, Union, Tuple, Iterator, Set, get_type_hints
 import dataclasses
 from dataclasses import dataclass, field
 import matplotlib.pyplot as plt  # type:ignore
@@ -105,7 +105,14 @@ class Profile:
         return "&".join(filter(None, ("&".join(key + '.' + str(value) for key, value in dataclasses.asdict(self).items() if value is not None and not isinstance(value, RolesType)),
                         "&".join("&".join(key + '.' + str(value) for value in value_list) for key, value_list in dataclasses.asdict(self).items() if value_list is not None and isinstance(value_list, RolesType)))))
 
-    def update(self, new, diff_mode=True):
+    def __le__(self, other) -> bool:
+        for k, v in self.__dict__.items():
+            if v is not None:
+                if getattr(self, k) != getattr(other, k):  # if we have this property set, check if it is the same as in other
+                    return False
+        return True
+
+    def update(self, new: Dict, diff_mode=True):
         diff_count = 0
         for key, value in new.items():
             if hasattr(self, key):
@@ -115,7 +122,7 @@ class Profile:
                     setattr(self, key, getattr(self, key) | value)  # getattr(self, key).union(value) if RolesType is Set else
                 else:
                     setattr(self, key, value)
-        return diff_count
+        return diff_count if diff_mode else self
 
 
 class Rates(NamedTuple):
@@ -325,7 +332,7 @@ class VulnerabilityInfo(NamedTuple):
 # or features supported by the simulation.
 # This is to be used as a global dictionary pre-populated before
 # starting the simulation and estimated from real-world data.
-VulnerabilityLibrary = Dict[VulnerabilityID, VulnerabilityInfo]
+VulnerabilityLibrary = OrderedDict[VulnerabilityID, VulnerabilityInfo]
 
 
 class RulePermission(Enum):
@@ -499,6 +506,15 @@ def collect_ports_from_vuln(vuln: VulnerabilityInfo) -> List[PortName]:
         return []
 
 
+def vuln_id_from_vuln(node_id: NodeID, id: VulnerabilityID, vuln_info: VulnerabilityInfo):
+    if isinstance(vuln_info.precondition, list):
+        return {":".join([str(node_id), str(precondition.expression), str(id)])
+                if node_id else ":".join([str(precondition.expression), str(id)])
+                for precondition in vuln_info.precondition}
+    else:
+        return {":".join([str(node_id), str(vuln_info.precondition.expression), str(id)]) if node_id else ":".join([str(vuln_info.precondition.expression), str(id)])}  # if vuln_info.precondition.expression is not Precondition("true").expression else ""])}
+
+
 def collect_vulnerability_ids_from_nodes_bytype(
         nodes: Iterator[Tuple[NodeID, NodeInfo]],
         global_vulnerabilities: VulnerabilityLibrary,
@@ -506,13 +522,13 @@ def collect_vulnerability_ids_from_nodes_bytype(
     """Collect and return all IDs of all vulnerability of the specified type
     that are referenced in a given set of nodes and vulnerability library
     """
-    return sorted(list({
-        id
-        for _, node_info in nodes
+    return sorted(list(set.union(*([
+        vuln_id_from_vuln(node_id, id, v)
+        for node_id, node_info in nodes
         for id, v in node_info.vulnerabilities.items()
         if v.type == type
-    }.union(
-        id
+    ] + [set()])).union(
+        vuln_id_from_vuln(None, id, v).pop()
         for id, v in global_vulnerabilities.items()
         if v.type == type
     )))
@@ -522,7 +538,7 @@ def collect_properties_from_nodes(nodes: Iterator[Tuple[NodeID, NodeInfo]]) -> L
     """Collect and return sorted list of all property names used in a given set of nodes"""
     return sorted({
         p
-        for _, node_info in nodes
+        for node_id, node_info in nodes
         for p in node_info.properties
     })
 
@@ -547,7 +563,7 @@ def collect_ports_from_nodes(
          for service in node_info.services}))))
 
 
-def collect_profileusernames_from_vuln(vuln: VulnerabilityInfo) -> List[str]:
+def collect_profile_usernames_from_vuln(vuln: VulnerabilityInfo) -> List[str]:
     """Returns all the port named referenced in a given vulnerability"""
     outcome_precond_iter = iter(zip(vuln.outcome, vuln.precondition)) if isinstance(vuln.outcome, list) else iter(zip([vuln.outcome], [vuln.precondition]))
 
@@ -568,12 +584,12 @@ def collect_profile_usernames_from_nodes(
     return sorted(list({
         profile_username
         for _, v in vulnerability_library.items()
-        for profile_username in collect_profileusernames_from_vuln(v)
+        for profile_username in collect_profile_usernames_from_vuln(v)
     }.union({
         profile_username
         for _, node_info in nodes
         for _, v in node_info.vulnerabilities.items()
-        for profile_username in collect_profileusernames_from_vuln(v)
+        for profile_username in collect_profile_usernames_from_vuln(v)
     })))
 
 

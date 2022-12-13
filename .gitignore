@@ -74,6 +74,7 @@ notebooks/images/**
 .jupyter/
 .local/
 .npm/
+.pki
 #.profile
 .python_history
 .bash_history

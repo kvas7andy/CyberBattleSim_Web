@@ -339,7 +339,7 @@ def epsilon_greedy_search(
             epsilon = max(epsilon_minimum, epsilon * epsilon_multdecay)
 
     wrapped_env.close()
-    print("simulation ended")
+    logging.info("simulation ended\n")
     if plot_episodes_length:
         plottraining.plot_end()
 

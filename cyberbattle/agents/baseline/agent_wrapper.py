@@ -7,6 +7,7 @@ features extracted from the environment observations"""
 from cyberbattle._env.cyberbattle_env import EnvironmentBounds
 from typing import Optional, List, Tuple
 import enum
+import copy
 import numpy as np
 from gym import spaces, Wrapper
 from numpy import ndarray
@@ -385,17 +386,25 @@ class AbstractAction(Feature):
             if discovered_nodes_count <= 1:
                 return None
 
-            # NOTE: We can do better here than random pick: ultimately this
-            # should be learnt from target node properties
-            # NOTE: NOW we have each vulnerability unique based on node where it was writter
-            # choosing remote vulnerability among identifiers.remote_vulnerabilities, 
-            # target_node is first element of typle VulnerabilityID
+            # # NOTE: We can do better here than random pick: ultimately this
+            # # should be learnt from target node properties
+            # # NOTE: NOW we have each vulnerability unique based on node where it was writter
+            # # choosing remote vulnerability among identifiers.remote_vulnerabilities,
+            # # target_node is first element of typle VulnerabilityID
 
-            # pick any node from the discovered ones
-            # excluding the source node itself
-            target = (source_node + 1 + np.random.choice(discovered_nodes_count - 1)) % discovered_nodes_count
+            # # pick any node from the discovered ones
+            # # excluding the source node itself
+            # target = (source_node + 1 + np.random.choice(discovered_nodes_count - 1)) % discovered_nodes_count
 
-            return {'remote_vulnerability': np.array([source_node, target, vuln])}
+            # NOTE: Now we can identify exactly, target_node from vuln, because we imply
+            #  vuln taken form ~ (maximum_node_count, maximum_profiles_count, maximum_vulnerability_variables)
+
+            target_node = vuln // (self.env_properties.maximum_profiles_count * self.env_properties.maximum_vulnerability_variables)
+            vuln = vuln % self.env_properties.maximum_node_count
+            profile_ind = vuln // self.env_properties.maximum_vulnerability_variables
+            variable_ind = vuln % self.env_properties.maximum_vulnerability_variables
+
+            return {'remote_vulnerability': np.array([source_node, target_node, profile_ind, variable_ind])}
 
         # abstract_action_index == CONNECT
         abstract_action_index_int -= self.n_remote_actions
@@ -440,7 +449,10 @@ class AbstractAction(Feature):
             return gym_action['local_vulnerability'][1]
         elif 'remote_vulnerability' in gym_action:
             r = gym_action['remote_vulnerability']
-            return self.n_local_actions + r[2]
+            return self.n_local_actions + \
+                r[1] * self.env_properties.maximum_node_count + \
+                r[2] * self.env_properties.maximum_profiles_count + \
+                r[3]
 
         assert 'connect' in gym_action
         c = gym_action['connect']
@@ -525,7 +537,7 @@ class Verbosity(enum.IntEnum):
 class AgentWrapper(Wrapper):
     """Gym wrapper to update the agent state on every step"""
 
-    def __init__(self, env: cyberbattle_env.CyberBattleEnv, state: StateAugmentation):
+    def __init__(self, env: cyberbattle_env.CyberBattleEnv, state: StateAugmentation, p: EnvironmentBounds = None):
         super().__init__(env)
         self.state = state
 
