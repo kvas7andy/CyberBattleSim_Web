@@ -10,10 +10,9 @@
 
 from dataclasses import dataclass
 import dataclasses
-from datetime import time
+from datetime import time, datetime
 from boolean import boolean
 from collections import OrderedDict
-import logging
 import sys
 from enum import Enum
 from typing import Iterator, List, Optional, Set, Tuple, Dict, TypedDict, cast
@@ -21,10 +20,9 @@ from IPython.display import display
 import pandas as pd
 
 from cyberbattle.simulation.model import FirewallRule, MachineStatus, PrivilegeLevel, PropertyName, VulnerabilityID, VulnerabilityType
-from . import model
+import cyberbattle.simulation.model as model
+from cyberbattle.simulation.config import logger
 
-
-LOGGER = logging.getLogger("__name__")
 Reward = float
 
 DiscoveredNodeInfo = TypedDict('DiscoveredNodeInfo', {
@@ -36,13 +34,13 @@ DiscoveredNodeInfo = TypedDict('DiscoveredNodeInfo', {
 class Penalty:
     """Penalties (=negative reward) returned for some actions taken in the simulation"""
     # penalty for generic suspiciousness
-    SUPSPICIOUSNESS = -7.0  # -7.0
+    SUPSPICIOUSNESS = -50.0  # -7.0
 
     # penalty for attempting a connection to a port that was not open
     SCANNING_UNOPEN_PORT = -10.0
 
     # penalty for repeating the same exploit attempt
-    REPEAT = -15
+    REPEAT = -20
 
     LOCAL_EXPLOIT_FAILED = -20
     FAILED_REMOTE_EXPLOIT = -30
@@ -66,6 +64,10 @@ class Penalty:
     # If Precondition needs VPN (ip.local) but profile does not fit
     NO_VPN = -40
 
+    # < 0: agent gets feedback with penalty for triggering deception
+    # == 0: agent gets no feedback
+    DECEPTION_PENALTY_FOR_AGENT = 0
+
 
 # Reward for the first time a local or remote attack
 # gets successfully executed since the last time the target node was imaged.
@@ -84,8 +86,11 @@ PROPERTY_DISCOVERED_REWARD = 2
 # Fixed reward for discovering a new profile data, full or partial
 PROFILE_DISCOVERED_REWARD = 3
 
-# Fixed reward  for SSRF attack with local network disclosure
+# Fixed reward for revealing SSRF attack with local network disclosure
 IP_CHANGE_TO_IP_LOCAL = 10
+
+# Fixed reward for using SSRF
+SSRF = 15
 
 
 class ErrorType(Enum):
@@ -122,7 +127,7 @@ class NodeTrackingInformation:
     """Track information about nodes gathered throughout the simulation"""
     # Map (vulnid, local_or_remote) to time of last attack.
     # local_or_remote is true for local, false for remote
-    last_attack: Dict[Tuple[model.VulnerabilityID, bool], time] = dataclasses.field(default_factory=dict)
+    last_attack: Dict[Tuple[model.VulnerabilityID, bool, model.Precondition, bool], time] = dataclasses.field(default_factory=dict)
     # Last time the node got owned by the attacker agent
     last_owned_at: Optional[time] = None
     # All node properties discovered so far (indexes of _environment.identifiers.properties without privilege_tags)
@@ -134,7 +139,7 @@ class AgentActions:
         This is the AgentActions class. It interacts with and makes changes to the environment.
     """
 
-    def __init__(self, environment: model.Environment, throws_on_invalid_actions=True):
+    def __init__(self, environment: model.Environment, throws_on_invalid_actions=True, deception_penalty_raise=False):
         """
             AgentActions Constructor
 
@@ -145,9 +150,10 @@ class AgentActions:
         """
         self._environment = environment
         self._gathered_credentials: Set[model.CredentialID] = set()
-        self._gathered_profiles: List[model.Profile] = []
+        self._gathered_profiles: List[model.Profile] = [model.Profile(username="NoAuth")]
         self._discovered_nodes: "OrderedDict[model.NodeID, NodeTrackingInformation]" = OrderedDict()
         self._throws_on_invalid_actions = throws_on_invalid_actions
+        self.deception_penalty_raise = False
 
         # List of all special tags indicating a privilege level reached on a node
         self.privilege_tags = [model.PrivilegeEscalation(p).tag for p in list(PrivilegeLevel)]
@@ -162,23 +168,23 @@ class AgentActions:
         for node_id in self._discovered_nodes:
             yield (node_id, self._environment.get_node(node_id))
 
-    def _check_discovered_profiles(self, profiles: List[model.Profile], precondition: model.Precondition) -> bool:
-        expr = precondition.expression
-        expr_profile_symbols = [i for i in expr.get_symbols() if '.' in str(i)]
-        if not len(profiles):
-            return len(expr_profile_symbols) == 0
+    # def _check_discovered_profiles(self, profiles: List[model.Profile], precondition: model.Precondition) -> bool:
+    #     expr = precondition.expression
+    #     expr_profile_symbols = [i for i in expr.get_symbols() if '.' in str(i)]
+    #     if not len(profiles):
+    #         return len(expr_profile_symbols) == 0
 
-        for profile in profiles:
-            profile_symbols = ALGEBRA.parse(str(profile)).get_symbols()
+    #     for profile in profiles:
+    #         profile_symbols = ALGEBRA.parse(str(profile)).get_symbols()
 
-            true_value = ALGEBRA.parse('true')
-            false_value = ALGEBRA.parse('false')
-            mapping = {i: true_value if i in profile_symbols or '.' not in str(i) else false_value
-                       for i in expr.get_symbols()}
-            is_true: bool = cast(boolean.Expression, expr.subs(mapping)).simplify() == true_value
-            if is_true:
-                break
-        return is_true
+    #         true_value = ALGEBRA.parse('true')
+    #         false_value = ALGEBRA.parse('false')
+    #         mapping = {i: true_value if i in profile_symbols or '.' not in str(i) else false_value
+    #                    for i in expr.get_symbols()}
+    #         is_true: bool = cast(boolean.Expression, expr.subs(mapping)).simplify() == true_value
+    #         if is_true:
+    #             break
+    #     return is_true
 
     def _check_discovered_profile(self, profile: model.Profile, precondition: model.Precondition) -> bool:
         expr = precondition.expression
@@ -260,62 +266,71 @@ class AgentActions:
     def get_discovered_properties(self, node_id: model.NodeID) -> Set[int]:
         return self._discovered_nodes[node_id].discovered_properties
 
-    def __mark_node_as_discovered(self, node_id: model.NodeID) -> bool:
+    def __mark_node_as_discovered(self, node_id: model.NodeID, propagate: bool = True) -> bool:
         newly_discovered = node_id not in self._discovered_nodes
-        if newly_discovered:
-            LOGGER.info('discovered node: ' + node_id)
+        if propagate and propagate and newly_discovered:
+            logger.info('discovered node: ' + node_id)
             self._discovered_nodes[node_id] = NodeTrackingInformation()
         return newly_discovered
 
-    def __mark_nodeproperties_as_discovered(self, node_id: model.NodeID, properties: List[PropertyName]):
+    def __mark_nodeproperties_as_discovered(self, node_id: model.NodeID, properties: List[PropertyName], propagate: bool = True):
         properties_indices = [self._environment.identifiers.properties.index(p)
                               for p in properties
                               if p not in self.privilege_tags]
 
         if node_id in self._discovered_nodes:
+            if not propagate:
+                return len(properties_indices - self._discovered_nodes[node_id].discovered_properties)
+
             before_count = len(self._discovered_nodes[node_id].discovered_properties)
             self._discovered_nodes[node_id].discovered_properties = self._discovered_nodes[node_id].discovered_properties.union(properties_indices)
         else:
+            if not propagate:
+                return len(properties_indices)
+
             before_count = 0
             self._discovered_nodes[node_id] = NodeTrackingInformation(discovered_properties=set(properties_indices))
 
         newly_discovered_properties = len(self._discovered_nodes[node_id].discovered_properties) - before_count
         return newly_discovered_properties
 
-    def __mark_allnodeproperties_as_discovered(self, node_id: model.NodeID):
+    def __mark_allnodeproperties_as_discovered(self, node_id: model.NodeID, propagate: bool = True):
         node_info: model.NodeInfo = self._environment.network.nodes[node_id]['data']
-        return self.__mark_nodeproperties_as_discovered(node_id, node_info.properties)
+        return self.__mark_nodeproperties_as_discovered(node_id, node_info.properties, propagate)
 
     def __mark_node_as_owned(self,
                              node_id: model.NodeID,
-                             privilege: PrivilegeLevel = model.PrivilegeLevel.LocalUser) -> Tuple[Optional[time], bool]:
+                             privilege: PrivilegeLevel = model.PrivilegeLevel.LocalUser,
+                             propagate: bool = True) -> Tuple[Optional[time], bool]:
         """Mark a node as owned.
         Return the time it was previously own (or None) and whether it was already owned."""
         node_info = self._environment.get_node(node_id)
 
         last_owned_at, is_currently_owned = self.__is_node_owned_history(node_id, node_info)
 
-        if not is_currently_owned:
+        if propagate and propagate and not is_currently_owned:
             if node_id not in self._discovered_nodes:
                 self._discovered_nodes[node_id] = NodeTrackingInformation()
             node_info.agent_installed = True
             node_info.privilege_level = model.escalate(node_info.privilege_level, privilege)
             self._environment.network.nodes[node_id].update({'data': node_info})
 
-            self.__mark_allnodeproperties_as_discovered(node_id)
+            self.__mark_allnodeproperties_as_discovered(node_id, propagate)
 
             # Record that the node just got owned at the current time
-            self._discovered_nodes[node_id].last_owned_at = time()
+            self._discovered_nodes[node_id].last_owned_at = datetime.now()
 
         return last_owned_at, is_currently_owned
 
-    def __mark_discovered_entities(self, reference_node: model.NodeID, outcome: model.VulnerabilityOutcome) -> Tuple[int, float, int]:
+    def __mark_discovered_entities(self, reference_node: model.NodeID, outcome: model.VulnerabilityOutcome,
+                                   propagate: bool = True) -> Tuple[int, float, int]:
         """Mark discovered entities as such and return
         the number of newly discovered nodes, their total value and the number of newly discovered credentials"""
         newly_discovered_nodes = 0
         newly_discovered_nodes_value = 0
         newly_discovered_credentials = 0
         newly_discovered_profiles = 0
+        ip_local_change = False
 
         if isinstance(outcome, model.LeakedCredentials):
             for credential in outcome.credentials:
@@ -325,18 +340,21 @@ class AgentActions:
 
                 if credential.credential not in self._gathered_credentials:
                     newly_discovered_credentials += 1
-                    self._gathered_credentials.add(credential.credential)
+                    if propagate:
+                        self._gathered_credentials.add(credential.credential)
 
-                LOGGER.info('discovered credential: ' + str(credential))
-                self.__annotate_edge(reference_node, credential.node, EdgeAnnotation.KNOWS)
+                if propagate:
+                    logger.info('discovered credential: ' + str(credential))
+                    self.__annotate_edge(reference_node, credential.node, EdgeAnnotation.KNOWS)
 
         elif isinstance(outcome, model.LeakedNodesId):
             for node_id in outcome.nodes:
-                if self.__mark_node_as_discovered(node_id):
+                if self.__mark_node_as_discovered(node_id, propagate=propagate):
                     newly_discovered_nodes += 1
                     newly_discovered_nodes_value += self._environment.get_node(node_id).value
 
-                self.__annotate_edge(reference_node, node_id, EdgeAnnotation.KNOWS)
+                if propagate:
+                    self.__annotate_edge(reference_node, node_id, EdgeAnnotation.KNOWS)
 
         elif isinstance(outcome, model.LeakedProfiles):
             for profile_str in outcome.discovered_profiles:
@@ -351,28 +369,26 @@ class AgentActions:
                 else:
                     if profile_dict["username"] not in [prof.username for prof in self._gathered_profiles]:
                         newly_discovered_profiles += len(profile_dict)
-                        self._gathered_profiles.append(model.Profile(**profile_dict))
-                        if len(profile_dict) > 0:
-                            LOGGER.info(f'discovered profile: {profile_str} with N={len(profile_dict)} newly discovered properties ')
+                        if propagate:
+                            self._gathered_profiles.append(model.Profile(**profile_dict))
+                            if len(profile_dict) > 0:
+                                logger.info(f'discovered profile: {profile_str} with N={len(profile_dict)} newly discovered properties ')
                     else:
                         for profile in self._gathered_profiles:
                             if profile_dict["username"] == profile.username:
-                                n_updates = profile.update(profile_dict)
+                                n_updates = profile.update(profile_dict, propagate=propagate)
                                 newly_discovered_profiles += n_updates
-                                if n_updates > 0:
-                                    LOGGER.info(f'discovered profile: {profile_str} with N={n_updates} newly discovered properties ')
+                                if propagate and n_updates > 0:
+                                    logger.info(f'discovered profile: {profile_str} with N={n_updates} newly discovered properties to profile {profile.username}')
                                 # for key, value in dataclasses.asdict(profile):
                                 #     if value is None and key in profile_dict.keys():
                                 #         profile
 
-                if "ip.local" in profile_str and not self.__ip_local:
-                    newly_discovered_profiles += IP_CHANGE_TO_IP_LOCAL
-                    self.__ip_local = True
-                if newly_discovered_profiles > 0:
-                    LOGGER.info(f'discovered profile: {profile_str} with N={newly_discovered_profiles} newly discovered properties ')
-                # TODO annotate somehow for visibility self.__annotate_edge(reference_node, credential.node, EdgeAnnotation.KNOWS)
+                if not (self.__ip_local or ip_local_change):
+                    ip_local_change = "ip.local" in profile_str
 
-        return newly_discovered_nodes, newly_discovered_nodes_value, newly_discovered_credentials, newly_discovered_profiles
+        return newly_discovered_nodes, newly_discovered_nodes_value, \
+            newly_discovered_credentials, newly_discovered_profiles, ip_local_change
 
     def get_node_privilegelevel(self, node_id: model.NodeID) -> model.PrivilegeLevel:
         """Return the last recorded privilege level of the specified node"""
@@ -398,10 +414,10 @@ class AgentActions:
                           profile: Optional[model.Profile] = None
                           ) -> Tuple[bool, ActionResult]:
 
-        LOGGER.info("Process outcome")
+        # # logger.info("Process outcome")
 
         if node_info.status != model.MachineStatus.Running:
-            LOGGER.warn("target machine not in running state")
+            logger.warning("target machine not in running state")
             return False, ActionResult(reward=Penalty.MACHINE_NOT_RUNNING,
                                        outcome=None, profile=str(profile), precondition="", reward_string="")
 
@@ -418,7 +434,7 @@ class AgentActions:
             else:
                 # THIS was only possible with target_node being random,
                 #  now everything is in action_mask, and isinvalid(...) check is done to change exploit -> explore
-                LOGGER.warn("Vulnerability '{}' not supported by node '{}'".format(vulnerability_id, node_id))
+                logger.warning("Vulnerability '{}' not supported by node '{}'".format(vulnerability_id, node_id))
                 return False, ActionResult(reward=Penalty.SUPSPICIOUSNESS, outcome=None, profile=str(profile), precondition="", reward_string="")
 
         vulnerability = vulnerabilities[vulnerability_id]
@@ -450,7 +466,10 @@ class AgentActions:
 
         for precondition, precondition_index, outcome in precond_ind_outcome_str_iter:
             reward = -vulnerability.cost
-            if "ip.local" in [str(i) for i in precondition.expression.get_symbols() if '.' in str(i)] and not ip_local_flag:
+
+            if "ip.local" in [str(i) for i in precondition.expression.get_symbols() if '.' in str(i)] and \
+                    \
+                    not ip_local_flag:
                 if max_reward < reward + Penalty.NO_VPN:
                     error_type = ErrorType.IP_LOCAL_NEEDED
                     max_precondition_index = precondition_index
@@ -460,11 +479,10 @@ class AgentActions:
 
             if not self._check_discovered_profile(profile, precondition):
                 if max_reward < reward + Penalty.FAILED_REMOTE_EXPLOIT:
-                    if "username" not in str(precondition.expression):
-                        error_type = ErrorType.ROLES_WRONG
-                    error_type = ErrorType.WRONG_AUTH
+                    error_type = ErrorType.WRONG_AUTH if "username" in str(precondition.expression) \
+                        else ErrorType.ROLES_WRONG
                     max_precondition_index = precondition_index
-                    max_reward = reward + Penalty.FAILED_REMOTE_EXPLOIT
+                    max_reward = reward + failed_penalty
                     max_outcome = model.ExploitFailed()
                 continue
 
@@ -482,22 +500,17 @@ class AgentActions:
             # then add the escalation tag to the node properties
             if isinstance(outcome, model.PrivilegeEscalation):
                 if outcome.tag in node_info.properties:
-                    if max_reward < reward + Penalty.REPEAT:
-                        error_type = ErrorType.REPEATED
-                        max_precondition_index = precondition_index
-                        max_reward = reward + Penalty.REPEAT
-                        max_outcome = outcome
-                    continue
+                    reward += Penalty.REPEAT
+                else:
+                    last_owned_at, is_currently_owned = self.__mark_node_as_owned(node_id, outcome.level, propagate=False)
+                    if not last_owned_at:
+                        reward += float(node_info.value)
 
-                last_owned_at, is_currently_owned = self.__mark_node_as_owned(node_id, outcome.level)
-
-                if not last_owned_at:
-                    reward += float(node_info.value)
-
-                node_info.properties.append(outcome.tag)
+                    # TOCHECK Here should be also new properties count
+                    node_info.properties.append(outcome.tag)
 
             elif isinstance(outcome, model.LateralMove):
-                last_owned_at, is_currently_owned = self.__mark_node_as_owned(node_id)
+                last_owned_at, is_currently_owned = self.__mark_node_as_owned(node_id, propagate=False)
 
                 if not last_owned_at:
                     reward += float(node_info.value)
@@ -507,43 +520,48 @@ class AgentActions:
                     assert p in node_info.properties, \
                         f'Discovered property {p} must belong to the set of properties associated with the node.'
 
-                newly_discovered_properties = self.__mark_nodeproperties_as_discovered(node_id, outcome.discovered_properties)
+                newly_discovered_properties = self.__mark_nodeproperties_as_discovered(node_id, outcome.discovered_properties, propagate=False)
                 reward += newly_discovered_properties * PROPERTY_DISCOVERED_REWARD
 
             elif isinstance(outcome, model.CustomerData):
                 reward += outcome.reward
 
-            if isinstance(outcome, model.ExploitFailed):
-                reward += Penalty.FAILED_REMOTE_EXPLOIT if expected_type == VulnerabilityType.REMOTE else Penalty.LOCAL_EXPLOIT_FAILED
-                if max_reward < reward:
-                    max_precondition_index = precondition_index
-                    max_reward = reward
-                    max_outcome = model.ExploitFailed()
-                continue
+            elif isinstance(outcome, model.DetectionPoint):
+                reward += Penalty.DECEPTION_PENALTY_FOR_AGENT
 
+            # TOCHECK should be never true, as once we discover node_id, we should input it,
+            # if target_node_id is not inside desicovered_nodes yet,
+            # 1) action_mask, shoudl have excluded it 2) exploit_remote_vulnerability excludes it
             if node_id not in self._discovered_nodes:
-                self._discovered_nodes[node_id] = NodeTrackingInformation()
+                self._discovered_nodes[node_id] = NodeTrackingInformation()  # ???
 
-            lookup_key = (vulnerability_id, local_or_remote, precondition, ip_local_flag)
+            lookup_key = (vulnerability_id, local_or_remote, precondition)
 
             already_executed = lookup_key in self._discovered_nodes[node_id].last_attack
 
             if already_executed:
                 last_time = self._discovered_nodes[node_id].last_attack[lookup_key]
                 if node_info.last_reimaging is None or last_time >= node_info.last_reimaging:
-                    reward = Penalty.REPEAT - vulnerability.cost
-                    if max_reward < reward:
+                    if max_reward < Penalty.REPEAT - vulnerability.cost:
                         error_type = ErrorType.REPEATED
                         max_precondition_index = precondition_index
-                        max_reward = reward
+                        max_reward = Penalty.REPEAT - vulnerability.cost
                         max_outcome = outcome
                     continue
-            else:
+            elif not isinstance(outcome, model.ExploitFailed):
                 reward += NEW_SUCCESSFULL_ATTACK_REWARD
 
-            self._discovered_nodes[node_id].last_attack[lookup_key] = time()
+            # self._discovered_nodes[node_id].last_attack[lookup_key] = datetime.now()
 
-            newly_discovered_nodes, discovered_nodes_value, newly_discovered_credentials, newly_discovered_profiles = self.__mark_discovered_entities(node_id, outcome)
+            # Update all entites
+
+            newly_discovered_nodes, \
+                discovered_nodes_value, \
+                newly_discovered_credentials, \
+                newly_discovered_profiles, ip_local_change = self.__mark_discovered_entities(node_id, outcome, propagate=False)
+
+            if not self.__ip_local and ip_local_change:
+                reward += IP_CHANGE_TO_IP_LOCAL
 
             # Note: `discovered_nodes_value` should not be added to the reward
             # unless the discovered nodes got owned, but this case is already covered above
@@ -551,22 +569,123 @@ class AgentActions:
             reward += newly_discovered_credentials * CREDENTIAL_DISCOVERED_REWARD
             reward += newly_discovered_profiles * PROFILE_DISCOVERED_REWARD
 
-            if max_reward < reward or ip_local_flag and "ip.local" in str(precondition.expression):
+            if "ip.local" in str(precondition.expression) and ip_local_flag:
+                reward += SSRF
+
+            # Check first if one of outcomes is ExploitFailed
+            # ExploitFailed used for 2 cases 1) error (above) 2) deception trigger (here)
+            if isinstance(outcome, model.ExploitFailed):
+                # reward = -vulnerability.cost
+                reward += -outcome.cost if outcome.cost is not None else Penalty.FAILED_REMOTE_EXPLOIT
+                # Here process deception reward if we want
+                # But we include already possible penalty in outcome == model.DetectionPoint
+                # reward += self.deception_penalty_raise * Penalty.DECEPTION_PENALTY_FOR_AGENT * outcome.deception
+                if max_reward < reward:
+                    error_type = ErrorType.OTHER
+                    max_precondition_index = precondition_index
+                    max_reward = reward
+                    max_outcome = outcome
+                continue
+
+
+            if max_reward < reward:
                 # print(newly_discovered_nodes, newly_discovered_credentials, newly_discovered_profiles, reward)
                 max_reward = reward
                 max_precondition_index = precondition_index
+                max_outcome = outcome  # vulnerability.outcome[max_precondition_index] if isinstance(vulnerability.outcome, list) else vulnerability.outcome
 
-        max_outcome = vulnerability.outcome[max_precondition_index] if isinstance(vulnerability.outcome, list) else vulnerability.outcome
+        # max_outcome = vulnerability.outcome[max_precondition_index] if isinstance(vulnerability.outcome, list) else vulnerability.outcome
         max_reward_string = vulnerability.reward_string[max_precondition_index] if isinstance(vulnerability.reward_string, list) else vulnerability.reward_string
         max_precondition = vulnerability.precondition[max_precondition_index] if isinstance(vulnerability.precondition, list) else vulnerability.precondition
 
         if max_reward <= 0:
-            LOGGER.warn((error_string_dict[error_type] + " => " + logger_action.format(max_reward, vulnerability_id, node_id,
-                                                                                       str(profile), str(max_precondition.expression), max_reward_string)))
+            logger.warning((error_string_dict[error_type] + " => " + logger_action).format(max_reward, vulnerability_id, node_id,
+                                                                                           str(profile), str(max_precondition.expression), max_reward_string))
             return False, ActionResult(reward=max_reward, outcome=max_outcome, profile=profile,
                                        precondition=max_precondition, reward_string=max_reward_string)
 
-        LOGGER.info(logger_action.format(max_reward, vulnerability_id, node_id, str(profile), str(max_precondition.expression), max_reward_string))
+        logger.info(logger_action.format(max_reward, vulnerability_id, node_id, str(profile), str(max_precondition.expression), max_reward_string))
+
+        reward = -vulnerability.cost
+        if isinstance(max_outcome, model.PrivilegeEscalation):
+            if max_outcome.tag in node_info.properties:
+                reward += Penalty.REPEAT
+            else:
+                last_owned_at, is_currently_owned = self.__mark_node_as_owned(node_id, max_outcome.level)
+                if not last_owned_at:
+                    reward += float(node_info.value)
+                node_info.properties.append(max_outcome.tag)
+
+        elif isinstance(max_outcome, model.LateralMove):
+            last_owned_at, is_currently_owned = self.__mark_node_as_owned(node_id)
+            if not last_owned_at:
+                reward += float(node_info.value)
+
+        elif isinstance(max_outcome, model.ProbeSucceeded):
+            for p in max_outcome.discovered_properties:
+                assert p in node_info.properties, \
+                    f'Discovered property {p} must belong to the set of properties associated with the node.'
+
+            newly_discovered_properties = self.__mark_nodeproperties_as_discovered(node_id, max_outcome.discovered_properties)
+            reward += newly_discovered_properties * PROPERTY_DISCOVERED_REWARD
+
+        elif isinstance(max_outcome, model.CustomerData):
+            reward += max_outcome.reward
+
+        elif isinstance(max_outcome, model.DetectionPoint):
+            reward += Penalty.DECEPTION_PENALTY_FOR_AGENT
+
+        # # Check first if one of outcomes is ExploitFailed
+        # # ExploitFailed used for 2 cases 1) error (above) 2) deception trigger (here)
+        # if isinstance(outcome, model.ExploitFailed):
+        #     reward += -outcome.cost
+        #     # Here process deception reward if we want
+        #     reward += self.deception_penalty_raise * Penalty.DECEPTION_PENALTY_FOR_AGENT*outcome.deception
+        #     if max_reward < reward:
+        #         error_type = ErrorType.OTHER
+        #         max_precondition_index = precondition_index
+        #         max_reward = reward
+        #         max_outcome = outcome
+        #     continue
+
+        if node_id not in self._discovered_nodes:
+            self._discovered_nodes[node_id] = NodeTrackingInformation()  # ???
+
+        lookup_key = (vulnerability_id, local_or_remote, max_precondition)
+
+        already_executed = lookup_key in self._discovered_nodes[node_id].last_attack
+
+        if already_executed:
+            last_time = self._discovered_nodes[node_id].last_attack[lookup_key]
+            if node_info.last_reimaging is None or last_time >= node_info.last_reimaging:
+                # should not come to REPEAT
+                pass
+        elif not isinstance(outcome, model.ExploitFailed):
+            reward += NEW_SUCCESSFULL_ATTACK_REWARD
+
+        self._discovered_nodes[node_id].last_attack[lookup_key] = datetime.now()
+
+        # Update all entites
+        newly_discovered_nodes, \
+            discovered_nodes_value, \
+            newly_discovered_credentials, \
+            newly_discovered_profiles, ip_local_change = self.__mark_discovered_entities(node_id, max_outcome)
+
+        if ip_local_change:
+            self.__ip_local = True
+            reward += IP_CHANGE_TO_IP_LOCAL
+            logger.info("Gained access to local network (possible to exploit SSRF)!")
+
+        reward += newly_discovered_nodes * NODE_DISCOVERED_REWARD
+        reward += newly_discovered_credentials * CREDENTIAL_DISCOVERED_REWARD
+        reward += newly_discovered_profiles * PROFILE_DISCOVERED_REWARD
+
+        if "ip.local" in str(max_precondition.expression) and ip_local_flag:
+            reward += SSRF
+            logger.info("Exploiting SSRF for access to endpoints through local network!")
+
+        assert reward == max_reward, f'{reward} and {max_reward}'
+
         return True, ActionResult(reward=max_reward, outcome=max_outcome, profile=profile,
                                   precondition=max_precondition, reward_string=max_reward_string)
 
@@ -656,10 +775,10 @@ class AgentActions:
                 if rule.permission == model.RulePermission.ALLOW:
                     return True
                 else:
-                    LOGGER.debug(f'BLOCKED TRAFFIC - PORT \'{port_name}\' Reason: ' + rule.reason)
+                    logger.debug(f'BLOCKED TRAFFIC - PORT \'{port_name}\' Reason: ' + rule.reason)
                     return False
 
-        LOGGER.debug(f"BLOCKED TRAFFIC - PORT '{port_name}' - Reason: no rule defined for this port.")
+        logger.debug(f"BLOCKED TRAFFIC - PORT '{port_name}' - Reason: no rule defined for this port.")
         return False
 
     def __is_node_owned_history(self, target_node_id, target_node_data):
@@ -711,33 +830,33 @@ class AgentActions:
                 return ActionResult(reward=Penalty.INVALID_ACTION, outcome=None)
 
         if not self.__is_passing_firewall_rules(source_node.firewall.outgoing, port_name):
-            LOGGER.info(f"BLOCKED TRAFFIC: source node '{source_node_id}'" +
+            logger.info(f"BLOCKED TRAFFIC: source node '{source_node_id}'" +
                         f" is blocking outgoing traffic on port '{port_name}'")
             return ActionResult(reward=Penalty.BLOCKED_BY_LOCAL_FIREWALL,
                                 outcome=None)
 
         if not self.__is_passing_firewall_rules(target_node.firewall.incoming, port_name):
-            LOGGER.info(f"BLOCKED TRAFFIC: target node '{target_node_id}'" +
+            logger.info(f"BLOCKED TRAFFIC: target node '{target_node_id}'" +
                         f" is blocking outgoing traffic on port '{port_name}'")
             return ActionResult(reward=Penalty.BLOCKED_BY_REMOTE_FIREWALL,
                                 outcome=None)
 
         target_node_is_listening = port_name in [i.name for i in target_node.services]
         if not target_node_is_listening:
-            LOGGER.info(f"target node '{target_node_id}' not listening on port '{port_name}'")
+            logger.info(f"target node '{target_node_id}' not listening on port '{port_name}'")
             return ActionResult(reward=Penalty.SCANNING_UNOPEN_PORT,
                                 outcome=None)
         else:
             target_node_data: model.NodeInfo = self._environment.get_node(target_node_id)
 
             if target_node_data.status != model.MachineStatus.Running:
-                LOGGER.info("target machine not in running state")
+                logger.info("target machine not in running state")
                 return ActionResult(reward=Penalty.MACHINE_NOT_RUNNING,
                                     outcome=None)
 
             # check the credentials before connecting
             if not self._check_service_running_and_authorized(target_node_data, port_name, credential):
-                LOGGER.info("invalid credentials supplied")
+                logger.info("invalid credentials supplied")
                 return ActionResult(reward=Penalty.WRONG_PASSWORD,
                                     outcome=None)
 
@@ -751,10 +870,10 @@ class AgentActions:
 
             self.__annotate_edge(source_node_id, target_node_id, EdgeAnnotation.LATERAL_MOVE)
 
-            LOGGER.info(f"Infected node '{target_node_id}' from '{source_node_id}'" +
+            logger.info(f"Infected node '{target_node_id}' from '{source_node_id}'" +
                         f" via {port_name} with credential '{credential}'")
             if target_node.owned_string:
-                LOGGER.info("Owned message: " + target_node.owned_string)
+                logger.info("Owned message: " + target_node.owned_string)
 
             return ActionResult(reward=float(target_node_data.value) if last_owned_at is None else 0.0,
                                 outcome=model.LateralMove())
@@ -863,7 +982,7 @@ class DefenderAgentActions:
         node_info.agent_installed = False
         node_info.privilege_level = model.PrivilegeLevel.NoAccess
         node_info.status = model.MachineStatus.Imaging
-        node_info.last_reimaging = time()
+        node_info.last_reimaging = datetime.now()
         self._environment.network.nodes[node_id].update({'data': node_info})
 
     def on_attacker_step_taken(self):
@@ -873,7 +992,7 @@ class DefenderAgentActions:
             if remaining_steps > 0:
                 self.node_reimaging_progress[node_id] -= 1
             else:
-                LOGGER.info(f"Machine re-imaging completed: {node_id}")
+                logger.info(f"Machine re-imaging completed: {node_id}")
                 node_data = self._environment.get_node(node_id)
                 node_data.status = model.MachineStatus.Running
                 self.node_reimaging_progress.pop(node_id)

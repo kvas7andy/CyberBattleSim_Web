@@ -7,7 +7,7 @@ import sys
 
 from .plotting import PlotTraining, plot_averaged_cummulative_rewards
 from .agent_wrapper import AgentWrapper, EnvironmentBounds, Verbosity, ActionTrackingStateAugmentation
-import logging
+from cyberbattle.simulation.config import logger, configuration
 import numpy as np
 from cyberbattle._env import cyberbattle_env
 from typing import Tuple, Optional, TypedDict, List
@@ -94,8 +94,35 @@ TrainedLearner = TypedDict('TrainedLearner', {
     'all_episodes_availability': List[List[float]],
     'learner': Learner,
     'trained_on': str,
-    'title': str
+    'title': str,
+    'best_eval_running_mean': float
 })
+
+
+def write_to_summary(writer, all_rewards, epsilon, loss_string, observation, iteration_count, steps_done, writer_tag = "training"):
+    """
+    all_rewards: - (training case) list of rewards per episode; (evaluation case) list of sum of rewards during episode
+    """
+
+    is_training =  writer_tag == "training"
+    
+    total_reward = sum(all_rewards)
+    writer.add_histogram(writer_tag+"/rewards", all_rewards, steps_done)
+    writer.add_scalar(writer_tag+"/epsilon", epsilon, steps_done) if is_training else ''
+    writer.add_scalar(writer_tag+"/loss", float(loss_string), steps_done)  if is_training and  loss_string else ''
+
+    n_positive_actions = np.sum(np.array(all_rewards) > 0)
+    writer.add_scalar(writer_tag+"/n_positive_actions", n_positive_actions, steps_done)
+    writer.add_scalar(writer_tag+"/total_reward", total_reward, steps_done)
+    writer.add_text(writer_tag+"/deception_tracker", str({k: v.trigger_times for k, v in observation['_deception_tracker'].items()}), steps_done)
+    for k, v in observation['_deception_tracker'].items():
+        writer.add_scalar(writer_tag+"/detection_points_trigger_counter/" + k, len(v.trigger_times), steps_done)
+        writer.add_histogram(writer_tag+"/detection_points_trigger_steps/" + k, 
+                np.array(v.trigger_times), steps_done, bins = iteration_count) if len(v.trigger_times) else ''
+    trigger_steps_all = np.concatenate([v.trigger_times for _, v in observation['_deception_tracker'].items()])
+    writer.add_histogram(writer_tag+"/detection_points_trigger_steps", 
+                trigger_steps_all, steps_done, bins=iteration_count) if len(trigger_steps_all) else ''
+    writer.flush()
 
 
 def print_stats(stats):
@@ -122,6 +149,172 @@ def print_stats(stats):
     print_breakdown(stats, 'exploit')
     print(f"  exploit deflected to exploration: {stats['exploit_deflected_to_explore']}")
 
+def evaluate_model(
+    cyberbattle_gym_env: cyberbattle_env.CyberBattleEnv,
+    environment_properties: EnvironmentBounds,
+    learner: Learner,
+    title: str,
+    iteration_count: int,
+    epsilon: float,
+    eval_episode_count: int,
+    best_eval_running_mean: float,
+    training_steps_done: int = 0,
+    mean_reward_window: int = 10,
+    render=True,
+    render_last_episode_rewards_to: Optional[str] = None,
+    verbosity: Verbosity = Verbosity.Normal,
+    save_model_filename=""
+) -> TrainedLearner:
+    writer = configuration.writer
+
+    print(f"###### {title}\n"
+          f"Evaluating with: eval_episode_count={eval_episode_count},"
+          f"iteration_count={iteration_count},"
+          f"ϵ={epsilon},"
+          f"{learner.parameters_as_string()}")
+
+    initial_epsilon = epsilon
+
+    all_episodes_rewards = []
+    all_episodes_sum_rewards = []
+    all_episodes_availability = []
+
+    wrapped_env = AgentWrapper(cyberbattle_gym_env,
+                               ActionTrackingStateAugmentation(environment_properties, cyberbattle_gym_env.reset()))
+    steps_done = 0
+
+    plot_title = f"{title} (epochs={eval_episode_count}, ϵ={initial_epsilon}" + learner.parameters_as_string()
+
+    render_file_index = 1
+    max_mean_over_episodes = -sys.float_info.max
+
+    for i_episode in range(1, eval_episode_count + 1):
+
+        print(f"  ## Episode: {i_episode}/{eval_episode_count} '{title}' "
+              f"ϵ={epsilon:.4f}, "
+              f"{learner.parameters_as_string()}") 
+
+        observation = wrapped_env.reset()
+        total_reward = 0.0
+        all_rewards = []
+        all_availability = []
+        learner.new_episode()
+
+        stats = Stats(exploit=Outcomes(reward=Breakdown(local=0, remote=0, connect=0),
+                                       noreward=Breakdown(local=0, remote=0, connect=0)),
+                      explore=Outcomes(reward=Breakdown(local=0, remote=0, connect=0),
+                                       noreward=Breakdown(local=0, remote=0, connect=0)),
+                      exploit_deflected_to_explore=0
+                      )
+
+        episode_ended_at = None
+        sys.stdout.flush()
+
+
+        for t in range(1, 1 + iteration_count):
+
+            steps_done += 1
+
+            # x = np.random.rand()
+            # if x <= epsilon:
+            #     action_style, gym_action, action_metadata = learner.explore(wrapped_env)
+            # else:
+            action_style, gym_action, action_metadata = learner.exploit(wrapped_env, observation)
+            if not gym_action:
+                stats['exploit_deflected_to_explore'] += 1
+                _, gym_action, action_metadata = learner.explore(wrapped_env)
+
+            # Take the step
+            # logger.debug(f"gym_action={gym_action}, action_metadata={action_metadata}") if configuration.log_results else None
+            observation, reward, done, info = wrapped_env.step(gym_action)
+
+            action_type = 'exploit' if action_style == 'exploit' else 'explore'
+            outcome = 'reward' if reward > 0 else 'noreward'
+            if 'local_vulnerability' in gym_action:
+                stats[action_type][outcome]['local'] += 1
+            elif 'remote_vulnerability' in gym_action:
+                stats[action_type][outcome]['remote'] += 1
+            else:
+                stats[action_type][outcome]['connect'] += 1
+
+            # learner.on_step(wrapped_env, observation, reward, done, info, action_metadata)
+            assert np.shape(reward) == ()
+
+            all_rewards.append(reward)
+            all_availability.append(info['network_availability'])
+            total_reward += reward
+            # bar.update(t, reward=total_reward)
+            # if reward > 0:
+                # bar.update(t, last_reward_at=t)
+
+            if verbosity == Verbosity.Verbose or (verbosity == Verbosity.Normal and reward > 0):
+                sign = ['-', '+'][reward > 0]
+
+                print(f"    {sign} t={t} {action_style} r={reward} total_reward:{total_reward} "
+                      f"a={action_metadata}-{gym_action} "
+                      f"creds={len(observation['credential_cache_matrix'])} "
+                      f" {learner.stateaction_as_string(action_metadata)}")
+
+            if i_episode == eval_episode_count \
+                    and render_last_episode_rewards_to is not None \
+                    and reward > 0:
+                fig = cyberbattle_gym_env.render_as_fig()
+                fig.write_image(f"{render_last_episode_rewards_to}-e{i_episode}-{render_file_index}.png")
+                render_file_index += 1
+
+            learner.end_of_iteration(t, done)
+
+            if done:
+                episode_ended_at = t
+                # bar.update(t, done_at=t)
+                # bar.finish(dirty=True)
+                break
+
+        sys.stdout.flush()
+
+        loss_string = learner.loss_as_string()
+
+        write_to_summary(writer, np.array(all_rewards), epsilon, loss_string, observation, iteration_count, training_steps_done + steps_done, writer_tag="evaluation")
+
+        if loss_string:
+            loss_string = f"loss={loss_string}"
+
+
+        if episode_ended_at:
+            print(f"Episode {i_episode} ended at t={episode_ended_at} total_reward {total_reward} with {loss_string}")
+        else:
+            print(f"Episode {i_episode} stopped at t={iteration_count} total_reward {total_reward} with {loss_string}")
+
+        print_stats(stats)
+
+        all_episodes_sum_rewards.append(sum(all_rewards))
+        all_episodes_rewards.append(all_rewards)
+        all_episodes_availability.append(all_availability)
+
+        mean_over_window = np.mean(all_episodes_sum_rewards[-mean_reward_window:])
+        if max_mean_over_episodes < mean_over_window:
+            max_mean_over_episodes = mean_over_window
+
+            if save_model_filename:
+                learner.save(save_model_filename.replace('.tar', f'evaluation_stepsdone_{training_steps_done + steps_done}.tar'))
+                learner.save(save_model_filename.replace('.tar', f'evaluation.tar'))
+
+        length = episode_ended_at if episode_ended_at else iteration_count
+        learner.end_of_episode(i_episode=i_episode, t=length)
+        # if render:
+        #     wrapped_env.render()
+
+    wrapped_env.close()
+    logger.info("evaluation ended\n") if configuration.log_results else None
+
+    return TrainedLearner(
+        all_episodes_rewards=all_episodes_rewards,
+        all_episodes_availability=all_episodes_availability,
+        learner=learner,
+        trained_on=cyberbattle_gym_env.name,
+        title=plot_title,
+        best_eval_running_mean= best_eval_running_mean
+    )   
 
 def epsilon_greedy_search(
     cyberbattle_gym_env: cyberbattle_env.CyberBattleEnv,
@@ -134,10 +327,15 @@ def epsilon_greedy_search(
     epsilon_minimum=0.0,
     epsilon_multdecay: Optional[float] = None,
     epsilon_exponential_decay: Optional[int] = None,
-    render=True,
+    eval_episode_count: Optional[int] = 0,
+    eval_freq: Optional[int]  = 5,
+    mean_reward_window = 10,
+    render=False,
     render_last_episode_rewards_to: Optional[str] = None,
     verbosity: Verbosity = Verbosity.Normal,
-    plot_episodes_length=True
+    plot_episodes_length=True,
+    save_model_filename="",
+    only_eval_summary=False,
 ) -> TrainedLearner:
     """Epsilon greedy search for CyberBattle gym environments
 
@@ -187,6 +385,8 @@ def epsilon_greedy_search(
 
     """
 
+    writer = configuration.writer
+
     print(f"###### {title}\n"
           f"Learning with: episode_count={episode_count},"
           f"iteration_count={iteration_count},"
@@ -199,6 +399,7 @@ def epsilon_greedy_search(
     initial_epsilon = epsilon
 
     all_episodes_rewards = []
+    all_episodes_sum_rewards = []
     all_episodes_availability = []
 
     wrapped_env = AgentWrapper(cyberbattle_gym_env,
@@ -211,6 +412,8 @@ def epsilon_greedy_search(
     plottraining = PlotTraining(title=plot_title, render_each_episode=render)
 
     render_file_index = 1
+    best_running_mean = -sys.float_info.max
+    best_eval_running_mean = -sys.float_info.max
 
     for i_episode in range(1, episode_count + 1):
 
@@ -241,9 +444,13 @@ def epsilon_greedy_search(
                 '|Iteration ',
                 progressbar.Counter(),
                 '|',
-                progressbar.Variable(name='reward', width=6, precision=10),
+                progressbar.Variable(name='reward', width=7, precision=10),
                 '|',
                 progressbar.Variable(name='last_reward_at', width=4),
+                '|',
+                progressbar.Variable(name='done_at', width=4),
+                '|',
+                progressbar.Variable(name='epsilon', width=4),
                 '|',
                 progressbar.Timer(),
                 progressbar.Bar()
@@ -268,7 +475,7 @@ def epsilon_greedy_search(
                     _, gym_action, action_metadata = learner.explore(wrapped_env)
 
             # Take the step
-            logging.debug(f"gym_action={gym_action}, action_metadata={action_metadata}")
+            logger.debug(f"gym_action={gym_action}, action_metadata={action_metadata}") if configuration.log_results else None
             observation, reward, done, info = wrapped_env.step(gym_action)
 
             action_type = 'exploit' if action_style == 'exploit' else 'explore'
@@ -287,13 +494,15 @@ def epsilon_greedy_search(
             all_availability.append(info['network_availability'])
             total_reward += reward
             bar.update(t, reward=total_reward)
+            bar.update(t, epsilon=epsilon)
+            
             if reward > 0:
                 bar.update(t, last_reward_at=t)
 
             if verbosity == Verbosity.Verbose or (verbosity == Verbosity.Normal and reward > 0):
                 sign = ['-', '+'][reward > 0]
 
-                print(f"    {sign} t={t} {action_style} r={reward} cum_reward:{total_reward} "
+                print(f"    {sign} t={t} {action_style} r={reward} total_reward:{total_reward} "
                       f"a={action_metadata}-{gym_action} "
                       f"creds={len(observation['credential_cache_matrix'])} "
                       f" {learner.stateaction_as_string(action_metadata)}")
@@ -309,24 +518,46 @@ def epsilon_greedy_search(
 
             if done:
                 episode_ended_at = t
+                bar.update(t, done_at=t)
                 bar.finish(dirty=True)
                 break
 
         sys.stdout.flush()
 
         loss_string = learner.loss_as_string()
+        if not only_eval_summary:
+            write_to_summary(writer, np.array(all_rewards), epsilon, loss_string, observation, iteration_count, steps_done)
         if loss_string:
-            loss_string = "loss={loss_string}"
+            loss_string = f"loss={loss_string}"
+
+
 
         if episode_ended_at:
-            print(f"  Episode {i_episode} ended at t={episode_ended_at} {loss_string}")
+            print(f"Episode {i_episode} ended at t={episode_ended_at} total_reward {total_reward} with {loss_string}")
         else:
-            print(f"  Episode {i_episode} stopped at t={iteration_count} {loss_string}")
+            print(f"Episode {i_episode} stopped at t={iteration_count} total_reward {total_reward} with {loss_string}")
 
         print_stats(stats)
 
+        # Evaluate model
+        if not i_episode % eval_freq:
+            trained_learner = evaluate_model(cyberbattle_gym_env, environment_properties, learner, title, iteration_count, epsilon, 
+                        eval_episode_count, best_eval_running_mean, training_steps_done=steps_done, render=True, mean_reward_window = mean_reward_window, 
+                        render_last_episode_rewards_to= None, 
+                        verbosity = Verbosity.Quiet,save_model_filename=save_model_filename)
+            best_eval_running_mean = trained_learner['best_eval_running_mean']
+
+        all_episodes_sum_rewards.append(sum(all_rewards))
         all_episodes_rewards.append(all_rewards)
         all_episodes_availability.append(all_availability)
+
+        mean_over_window = np.mean(all_episodes_sum_rewards[-mean_reward_window:])
+        if best_running_mean < mean_over_window:
+            best_running_mean = mean_over_window
+
+            if save_model_filename:
+                learner.save(save_model_filename.replace('.tar', f'_stepsdone_{steps_done}.tar'))
+                learner.save(save_model_filename)
 
         length = episode_ended_at if episode_ended_at else iteration_count
         learner.end_of_episode(i_episode=i_episode, t=length)
@@ -339,7 +570,7 @@ def epsilon_greedy_search(
             epsilon = max(epsilon_minimum, epsilon * epsilon_multdecay)
 
     wrapped_env.close()
-    logging.info("simulation ended\n")
+    logger.info("simulation ended\n") if configuration.log_results else None
     if plot_episodes_length:
         plottraining.plot_end()
 
@@ -348,7 +579,8 @@ def epsilon_greedy_search(
         all_episodes_availability=all_episodes_availability,
         learner=learner,
         trained_on=cyberbattle_gym_env.name,
-        title=plot_title
+        title=plot_title,
+        best_eval_running_mean = best_eval_running_mean
     )
 
 

@@ -20,7 +20,6 @@ from stable_baselines3.common.logger import TensorBoardOutputFormat
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecEnv
 from cyberbattle._env.flatten_wrapper import FlattenObservationWrapper, FlattenActionWrapper
 import os
-os.environ["CUDA_LAUNCH_BLOCKING"] = '1'
 th.cuda.set_device('cuda:3')
 retrain = ['a2c']
 
@@ -85,7 +84,7 @@ ignore_fields = [
 ]
 env2 = FlattenObservationWrapper(cast(CyberBattleEnv, env1), ignore_fields=ignore_fields)
 
-log_dir = os.path.join('logdir/exper/stablebaselines', str(env))
+log_dir = os.path.join('logs/exper/stablebaselines', str(env))
 
 
 def return_env(env) -> CyberBattleEnv:

@@ -27,7 +27,8 @@ from cyberbattle._env import cyberbattle_env
 import numpy as np
 from typing import List, NamedTuple, Optional, Tuple, Union
 import random
-import logging
+import os
+
 
 # deep learning packages
 from torch import Tensor
@@ -42,9 +43,9 @@ from .learner import Learner
 from .agent_wrapper import EnvironmentBounds
 import cyberbattle.agents.baseline.agent_wrapper as w
 from .agent_randomcredlookup import CredentialCacheExploiter
+from cyberbattle.simulation.config import logger
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-LOGGER = logging.getLogger("__name__")
 
 
 class CyberBattleStateActionModel:
@@ -115,25 +116,15 @@ class CyberBattleStateActionModel:
             gym_action = self.action_space.specialize_to_gymaction(
                 source_node, observation, np.int32(abstract_action))
 
-            # When target node is chosen randomly in specialize_to_gymaction, we relink target_node to the target_node vrom vulnerability, using its VulnerabilityID = ("target_node","vuln_id")
-            # if gym_action and "remote_vulnerability" in gym_action.keys():
-            #     vuln_id = wrapped_env.identifiers.remote_vulnerabilities[gym_action["remote_vulnerability"][2]]
-            #     node_id = wrapped_env.find_external_index(vuln_id[0])
-            #     if node_id:
-            #         gym_action["remote_vulnerability"][1] = node_id
-            #     else:  # invalid action, for remote env, no nodeid (target node) in discovered_nodes
-            #         logging.warn(f"Action_style exploit[invalid]->explore, Gym action {wrapped_env.internal_action_to_pretty_print(gym_action)}")
-            #         return "exploit[invalid]->explore", None, None
-
             if not gym_action:  # undefined, because NN output was invlid, > n_discovered_nodes, > n_credential_cache
-                LOGGER.warn(f"Output from NN is MISSING!")
+                logger.warning("Output from NN is MISSING!")
                 return "exploit[undefined]->explore", None, None
 
-            elif wrapped_env.env.is_action_valid(gym_action, observation['action_mask']):
-                return "exploit", gym_action, source_node
-            else:  # invalid because invalid by action_mask
-                LOGGER.warn(f"Output from NN is INVALID!\n\tAction_style exploit[invalid]->explore, Gym action {wrapped_env.internal_action_to_pretty_print(gym_action)}")
-                return "exploit[invalid]->explore", None, None
+            # elif wrapped_env.env.is_action_valid(gym_action, observation['action_mask']):
+            return "exploit", gym_action, source_node
+            # else:  # invalid because invalid by action_mask
+            #    logger.warning(f"Output from NN is INVALID!\n\tAction_style exploit[invalid]->explore, Gym action {wrapped_env.internal_action_to_pretty_print(gym_action)}")
+            #    return "exploit[invalid]->explore", None, None
         else:  # features input is invalid (should not be an issue)
             return "exploit[no_actor]->explore", None, None
 
@@ -286,6 +277,7 @@ class DeepQLearnerPolicy(Learner):
             f"-> 'abstract_action'"
 
     def optimize_model(self, norm_clipping=False):
+        self.policy_net.train()
         if len(self.memory) < self.batch_size:
             return
 
@@ -323,11 +315,11 @@ class DeepQLearnerPolicy(Learner):
         expected_state_action_values = (next_state_values * self.gamma) + reward_batch
 
         # Compute Huber loss
-        loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
+        self.loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
 
         # Optimize the model
         self.optimizer.zero_grad()
-        loss.backward()
+        self.loss.backward()
 
         # Gradient clipping
         if norm_clipping:
@@ -337,6 +329,7 @@ class DeepQLearnerPolicy(Learner):
                 if param.grad is not None:
                     param.grad.data.clamp_(-1, 1)
         self.optimizer.step()
+        self.policy_net.eval()
 
     def get_actor_state_vector(self, global_state: ndarray, actor_features: ndarray) -> ndarray:
         return np.concatenate((np.array(global_state, dtype=np.float32),
@@ -504,3 +497,43 @@ class DeepQLearnerPolicy(Learner):
 
     def stateaction_as_string(self, action_metadata) -> str:
         return ''
+
+    def save(self, PATH: str, optimizer_save=False) -> None:
+        logger.info("Saving policy_net, target_net " + optimizer_save * "and optimizer " + "parameters")
+        if '.tar' not in PATH:
+            logger.warning("Checkpoint file should be of .tar format, got ." + PATH.split('.')[-1])
+        torch.save({**{'policy_net_state_dict': self.policy_net.state_dict(),
+                    'target_net_state_dict': self.policy_net.state_dict()},
+                   **({'optimizer_state_dict': self.optimizer.state_dict()} if optimizer_save else {})}, PATH)
+
+    def load(self, PATH: str, optimizer_load=True) -> None:
+        checkpoint = torch.load(PATH, map_location=device)
+        optimizer_saved = optimizer_load and 'optimzer_state_dict' in checkpoint.keys()
+        logger.info("Loading policy_net, target_net " + optimizer_saved * "and optimizer " + "parameters")
+        self.policy_net.load_state_dict(checkpoint['policy_net_state_dict'])
+        self.target_net.load_state_dict(checkpoint['target_net_state_dict'])
+        if optimizer_saved:
+            self.optimizer.load_state_dict(checkpoint['optimzer_state_dict'])
+
+        self.policy_net.to(device)
+        self.target_net.to(device)
+        self.policy_net.eval()
+        self.target_net.eval()
+
+    def load_best(self, logdir_training: str, evaluation_ckpt = True, optimizer_load=True) -> None:
+        filenames = [filename for filename in os.listdir(logdir_training) 
+                    if '.tar' in filename and ('modelevaluation'*evaluation_ckpt in filename 
+                        or 'modelevaluation'*(not evaluation_ckpt) not in filename)]
+        best_ind_list = [i for i, filename in enumerate(filenames) if 'stepsdone' not in filename]
+        if best_ind_list:
+            filename_best_ckpt = filenames[best_ind_list[0]]
+        else:
+            last_best_index = np.argmax([int(filename.split('_')[-1].split('.')[0]) for filename in filenames]) # getting the stepsdone value from the learned best model
+            filename_best_ckpt = filenames[last_best_index]
+        
+        self.load(os.path.join(logdir_training, filename_best_ckpt), optimizer_load=optimizer_load)
+        logger.info(f"Load best model from {'evaluation'*evaluation_ckpt + 'training'*(not evaluation_ckpt)} " + \
+                        " from file {os.path.join(logdir_training, filename_best_ckpt)}")
+
+    def loss_as_string(self) -> str:
+        return str(getattr(self, 'loss').item()) if hasattr(self, 'loss') else ''

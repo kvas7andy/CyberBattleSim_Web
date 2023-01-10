@@ -7,7 +7,6 @@ features extracted from the environment observations"""
 from cyberbattle._env.cyberbattle_env import EnvironmentBounds
 from typing import Optional, List, Tuple
 import enum
-import copy
 import numpy as np
 from gym import spaces, Wrapper
 from numpy import ndarray
@@ -400,7 +399,7 @@ class AbstractAction(Feature):
             #  vuln taken form ~ (maximum_node_count, maximum_profiles_count, maximum_vulnerability_variables)
 
             target_node = vuln // (self.env_properties.maximum_profiles_count * self.env_properties.maximum_vulnerability_variables)
-            vuln = vuln % self.env_properties.maximum_node_count
+            vuln = vuln % (self.env_properties.maximum_profiles_count * self.env_properties.maximum_vulnerability_variables)
             profile_ind = vuln // self.env_properties.maximum_vulnerability_variables
             variable_ind = vuln % self.env_properties.maximum_vulnerability_variables
 
@@ -450,8 +449,8 @@ class AbstractAction(Feature):
         elif 'remote_vulnerability' in gym_action:
             r = gym_action['remote_vulnerability']
             return self.n_local_actions + \
-                r[1] * self.env_properties.maximum_node_count + \
-                r[2] * self.env_properties.maximum_profiles_count + \
+                r[1] * self.env_properties.maximum_profiles_count * self.env_properties.maximum_vulnerability_variables + \
+                r[2] * self.env_properties.maximum_vulnerability_variables + \
                 r[3]
 
         assert 'connect' in gym_action
