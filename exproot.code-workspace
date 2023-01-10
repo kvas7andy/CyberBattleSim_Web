@@ -1,0 +1,62 @@
+{
+	"folders": [
+		{
+			"name": "root",
+			"path": "."
+		}
+	],
+	"settings": {
+		"python.defaultInterpreterPath": "/usr/bin/python",
+		"python.linting.pylintEnabled": false,
+		"python.linting.mypyEnabled": false,
+		"python.linting.flake8Enabled": true,
+		"python.linting.enabled": true,
+		"python.linting.mypyPath": "venv\\Scripts\\mypy.exe",
+		"python.linting.mypyArgs": [
+			"--config-file",
+			"setup.cfg"
+		],
+		"python.testing.pytestArgs": [
+			"cyberbattle"
+		],
+		"python.testing.unittestEnabled": false,
+		"python.testing.pytestEnabled": true,
+		"python.linting.lintOnSave": true,
+		"python.formatting.provider": "autopep8",
+		"editor.formatOnPaste": true,
+		"editor.formatOnSave": true,
+		"extensions.ignoreRecommendations": true,
+		"files.autoSave": "off",
+		"debug.allowBreakpointsEverywhere": true,
+		"python.languageServer": "Pylance",
+		"python.analysis.typeCheckingMode": "off",
+		"files.watcherExclude": {
+			"**/.git/objects/**": true,
+			"**/.git/subtree-cache/**": true,
+			"**/node_modules/*/**": true,
+			"typings/**": true,
+			"venv/**": true,
+			"~/.vscode-server/**": true,
+			"**/.npm/**": true,
+			"**/.github/**": true,
+			"**/.pytest_cache/**": true,
+			"**/.cache/**": true,
+			"loonshot_sim.egg-info": true
+		},
+		"files.exclude": {
+			"typings/**": true,
+			".vscode-server/**": true,
+			".npm/**": true,
+			".github/**": true,
+			".pytest_cache/**": true,
+			".cache/**": true,
+			".pki/**": true,
+			".jupyter/**": true,
+			".ipython/**": true,
+			".nv": true,
+			".local": true
+		},
+		"files.trimFinalNewlines": true,
+		"github-enterprise.uri": "github.wdf.sap.corp"
+	}
+}

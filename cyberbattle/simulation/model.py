@@ -112,16 +112,20 @@ class Profile:
                     return False
         return True
 
-    def update(self, new: Dict, diff_mode=True):
+    def update(self, new: Dict, diff_mode=True, propagate=True):
         diff_count = 0
         for key, value in new.items():
             if hasattr(self, key):
-                if diff_mode and not getattr(self, key):
-                    diff_count += 1
                 if isinstance(getattr(self, key), RolesType):
-                    setattr(self, key, getattr(self, key) | value)  # getattr(self, key).union(value) if RolesType is Set else
+                    if diff_mode:
+                        diff_count += len(value - getattr(self, key)) if not getattr(self, key) else 0
+                    if propagate:
+                        setattr(self, key, getattr(self, key) | value)  # getattr(self, key).union(value) if RolesType is Set else
                 else:
-                    setattr(self, key, value)
+                    if diff_mode:
+                        diff_count += int(not getattr(self, key))
+                    if propagate:
+                        setattr(self, key, value)
         return diff_count if diff_mode else self
 
 
@@ -246,7 +250,7 @@ class ProbeFailed(VulnerabilityOutcome):
 class ExploitFailed(VulnerabilityOutcome):
     """This is for situations where the exploit fails """
 
-    def __init__(self, cost: float = 0.0, deception=False, **kwargs):
+    def __init__(self, cost: Optional[float] = None, deception=False, **kwargs):
         super().__init__(**kwargs)
         self.cost = cost
         self.deception = deception
@@ -276,6 +280,13 @@ class LeakedNodesId(VulnerabilityOutcome):
         super().__init__(**kwargs)
         self.nodes = nodes
 
+class DetectionPoint(VulnerabilityOutcome):
+    """Detection point to track deception tocken"""
+
+    def __init__(self, detection_point_name: str, **kwargs):
+        super().__init__(**kwargs)
+        self.detection_point_name = detection_point_name 
+
 
 VulnerabilityOutcomes = Union[
     LeakedCredentials, LeakedNodesId, LeakedProfiles, PrivilegeEscalation, AdminEscalation,
@@ -304,6 +315,13 @@ class Precondition:
             self.expression = expression
         else:
             self.expression = ALGEBRA.parse(expression)
+
+class DeceptionTracker:
+    """Object with saving and updating tracking of deceptive elements"""
+
+    def __init__(self, detection_point_name: str, step = None):
+        self.detection_point_name = detection_point_name
+        self.trigger_times = [step] if step is not None else []
 
 
 class VulnerabilityInfo(NamedTuple):
@@ -430,6 +448,8 @@ class Identifiers(NamedTuple):
     remote_vulnerabilities: List[VulnerabilityID] = []
     # Array of all possible profile names
     profile_usernames: List[str] = []
+    # Array of all possible detection point names
+    detection_point_names: List[str] = [] 
 
 
 def iterate_network_nodes(network: nx.graph.Graph) -> Iterator[Tuple[NodeID, NodeInfo]]:
@@ -597,6 +617,26 @@ def collect_ports_from_environment(environment: Environment) -> List[PortName]:
     """Collect and return all port names used in a given environment"""
     return collect_ports_from_nodes(environment.nodes(), environment.vulnerability_library)
 
+def collect_detection_point_name_from_vuln(vuln: VulnerabilityInfo)-> List[str]:
+    """Returns all the port named referenced in a given vulnerability"""
+    outcome_iter = vuln.outcome if isinstance(vuln.outcome, list) else [vuln.outcome]
+
+    return [outcome.detection_point_name for outcome in outcome_iter if isinstance(outcome, DetectionPoint)]
+
+def collect_detection_point_names(nodes: Iterator[Tuple[NodeID, NodeInfo]],
+        vulnerability_library: VulnerabilityLibrary) -> List[PortName]:
+    """Collect and return all detection point names used in a given set of nodes
+    and global vulnerability library"""
+    return sorted(list({
+        detection_point_name
+        for _, v in vulnerability_library.items()
+        for detection_point_name in collect_detection_point_name_from_vuln(v)
+    }.union({
+        detection_point_name
+        for _, node_info in nodes
+        for _, v in node_info.vulnerabilities.items()
+        for detection_point_name in collect_detection_point_name_from_vuln(v)
+    })))
 
 def infer_constants_from_nodes(
         nodes: Iterator[Tuple[NodeID, NodeInfo]],
@@ -610,7 +650,8 @@ def infer_constants_from_nodes(
         remote_vulnerabilities=collect_vulnerability_ids_from_nodes_bytype(
             nodes, vulnerabilities, VulnerabilityType.REMOTE),
         profile_usernames=collect_profile_usernames_from_nodes(
-            nodes, vulnerabilities)
+            nodes, vulnerabilities),
+        detection_point_names = collect_detection_point_names(nodes, vulnerabilities)
     )
 
 

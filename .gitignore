@@ -48,11 +48,13 @@ sftp*-config.json
 
 # data
 *.zip
+*.tar
 **/*.csv
 **/*.png
 **/*.tfevents.*
 /venv/**
 /.cache/**
+logs_dgx/*
 
 /.dmypy.json
 src/.dmypy.json
@@ -65,6 +67,9 @@ cyberbattle/agents/baseline/notebooks/images/*.png
 cyberbattle/agents/baseline/notebooks/images/*.gif
 log.txt
 logfile.txt
+**.log
+**.pkl
+**.tar
 
 notebooks/output/**
 notebooks/images/**
