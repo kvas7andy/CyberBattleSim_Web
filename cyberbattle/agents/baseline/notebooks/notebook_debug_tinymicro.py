@@ -8,6 +8,10 @@
 #       format_name: percent
 #       format_version: '1.3'
 #       jupytext_version: 1.6.0
+#     kernelspec:
+#       display_name: python3
+#       language: python
+#       name: python3
 # ---
 
 # %%
@@ -25,7 +29,6 @@ import os
 import logging
 import gym
 import datetime
-import __main__
 from IPython.display import display
 import cyberbattle.agents.baseline.learner as learner
 from cyberbattle.agents.baseline.agent_wrapper import ActionTrackingStateAugmentation, AgentWrapper, Verbosity
@@ -56,8 +59,7 @@ training_episode_count = None
 train_while_exploit = False
 exploit_train = "exploit_train"   # "exploit_manual"
 
-sys_argv_0 = str(__main__.__file__)
-log_dir = 'logs/exper/' + sys_argv_0.split('/')[-1].split('.')[0]
+log_dir = 'logs/exper/' + "notebook_debug_tinymicro"
 # convert the datetime object to string of specific format
 datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 log_dir = os.path.join(log_dir, gymid, datetime_str)
@@ -70,8 +72,7 @@ os.environ['LOG_DIR'] = log_dir
 os.environ['TRAINING_EPISODE_COUNT'] = os.getenv('TRAINING_EPISODE_COUNT', 1000) if training_episode_count is None else training_episode_count
 os.environ['LOG_RESULTS'] = str(log_results)
 
-if log_results:
-    os.makedirs(log_dir,  exist_ok=True)
+os.makedirs(log_dir, exist_ok=True) if log_results else ''
 configuration.update_globals(log_dir, gymid, log_level, log_results)
 configuration.update_logger()
 

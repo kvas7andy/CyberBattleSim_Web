@@ -10,7 +10,7 @@ from . import agents
 from ._env.cyberbattle_env import AttackerGoal, DefenderGoal
 from .samples.chainpattern import chainpattern
 from .samples.toyctf import toy_ctf, tinytoy
-from .samples.microservices import tinymicro
+from .samples.microservices import tinymicro, tinymicro_deception_v1, tinymicro_deception_latest
 from .samples.active_directory import generate_ad
 from .simulation import generate_network, model
 
@@ -54,6 +54,37 @@ register(
 )
 
 
+if 'CyberBattleTinyMicro-v1' in registry.env_specs:
+    del registry.env_specs['CyberBattleTinyMicro-v1']
+
+register(
+    id='CyberBattleTinyMicro-v1',
+    cyberbattle_env_identifiers=tinymicro_deception_v1.ENV_IDENTIFIERS,
+    entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroV1',
+    kwargs={'defender_agent': None,
+            'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
+            'defender_goal': DefenderGoal(eviction=True),
+            'maximum_total_credentials': 1,
+            'maximum_node_count': 11
+            },
+    max_episode_steps=50,
+)
+
+if 'CyberBattleTinyMicro-latest' in registry.env_specs:
+    del registry.env_specs['CyberBattleTinyMicro-latest']
+
+register(
+    id='CyberBattleTinyMicro-v100',
+    cyberbattle_env_identifiers=tinymicro_deception_latest.ENV_IDENTIFIERS,
+    entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroLatest',
+    kwargs={'defender_agent': None,
+            'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
+            'defender_goal': DefenderGoal(eviction=True),
+            'maximum_total_credentials': 1,
+            'maximum_node_count': 11
+            },
+    max_episode_steps=50,
+)
 if 'CyberBattleToyCtf-v0' in registry.env_specs:
     del registry.env_specs['CyberBattleToyCtf-v0']
 

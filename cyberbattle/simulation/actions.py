@@ -18,6 +18,7 @@ from enum import Enum
 from typing import Iterator, List, Optional, Set, Tuple, Dict, TypedDict, cast
 from IPython.display import display
 import pandas as pd
+import numpy as np
 
 from cyberbattle.simulation.model import FirewallRule, MachineStatus, PrivilegeLevel, PropertyName, VulnerabilityID, VulnerabilityType
 import cyberbattle.simulation.model as model
@@ -100,6 +101,7 @@ class ErrorType(Enum):
     PROPERTY_WRONG = 4
     WRONG_AUTH = 5
     OTHER = 0
+    NOERROR = -1
 
 
 class EdgeAnnotation(Enum):
@@ -456,7 +458,7 @@ class AgentActions:
             # THIS should be invalid actually, for example, if DOCUMENT is not discovered
             ErrorType.PROPERTY_WRONG: "Not discovered info",
             ErrorType.WRONG_AUTH: "Authentification required",
-            ErrorType.OTHER: "Cannot {2}/{1}",
+            ErrorType.OTHER: "Cannot get {2}/{1}",
         }
 
         ip_local_flag = profile.ip == "local" if profile else False  # means we choose to try local network vuln using SSRF
@@ -464,35 +466,55 @@ class AgentActions:
         precond_ind_outcome_str_iter = iter(zip(precondition, range(len(precondition)), outcome)) \
             if isinstance(precondition, list) else iter(zip([precondition], range(1), [outcome]))
 
+        max_reward_list = []
+        max_outcome_list = []
+        max_precondition_index_list = []
+        error_type_list = []
+        success = False
         for precondition, precondition_index, outcome in precond_ind_outcome_str_iter:
             reward = -vulnerability.cost
 
             if "ip.local" in [str(i) for i in precondition.expression.get_symbols() if '.' in str(i)] and \
                     \
                     not ip_local_flag:
-                if max_reward < reward + Penalty.NO_VPN:
-                    error_type = ErrorType.IP_LOCAL_NEEDED
-                    max_precondition_index = precondition_index
-                    max_reward = reward + Penalty.NO_VPN
-                    max_outcome = model.ExploitFailed()
+                if max_reward <= reward + Penalty.NO_VPN:
+                    error_type_list.append(ErrorType.IP_LOCAL_NEEDED)
+                    max_precondition_index_list.append(precondition_index)
+                    max_reward_list.append(reward + Penalty.NO_VPN)
+                    max_outcome_list.append(model.ExploitFailed())
                 continue
 
             if not self._check_discovered_profile(profile, precondition):
-                if max_reward < reward + Penalty.FAILED_REMOTE_EXPLOIT:
-                    error_type = ErrorType.WRONG_AUTH if "username" in str(precondition.expression) \
-                        else ErrorType.ROLES_WRONG
-                    max_precondition_index = precondition_index
-                    max_reward = reward + failed_penalty
-                    max_outcome = model.ExploitFailed()
+                if max_reward <= reward + Penalty.FAILED_REMOTE_EXPLOIT:
+                    error_type_list.append(ErrorType.WRONG_AUTH if "username" in str(precondition.expression)
+                                           else ErrorType.ROLES_WRONG)
+                    max_precondition_index_list.append(precondition_index)
+                    max_reward_list.append(reward + failed_penalty)
+                    max_outcome_list.append(model.ExploitFailed())
                 continue
 
             # check vulnerability prerequisites
             if not self._check_prerequisites(node_id, precondition):
-                if max_reward < reward + failed_penalty:
-                    error_type = ErrorType.PROPERTY_WRONG
-                    max_precondition_index = precondition_index
-                    max_reward = reward + failed_penalty
-                    max_outcome = model.ExploitFailed()
+                if max_reward <= reward + failed_penalty:
+                    error_type_list.append(ErrorType.PROPERTY_WRONG)
+                    max_precondition_index_list.append(precondition_index)
+                    max_reward_list.append(reward + failed_penalty)
+                    max_outcome_list.append(model.ExploitFailed())
+                continue
+
+            # Check first if one of outcomes is ExploitFailed
+            # ExploitFailed used for 2 cases 1) error (above) 2) deception trigger (here)
+            if isinstance(outcome, model.ExploitFailed):
+                # reward = -vulnerability.cost
+                reward += -outcome.cost if outcome.cost is not None else Penalty.FAILED_REMOTE_EXPLOIT
+                # Here process deception reward if we want
+                # But we include already possible penalty in outcome == model.DetectionPoint
+                # reward += self.deception_penalty_raise * Penalty.DECEPTION_PENALTY_FOR_AGENT * outcome.deception
+                if max_reward <= reward:
+                    error_type_list.append(ErrorType.OTHER)
+                    max_precondition_index_list.append(precondition_index)
+                    max_reward_list.append(reward)
+                    max_outcome_list.append(outcome)
                 continue
 
             # if the vulnerability type is a privilege escalation
@@ -502,7 +524,7 @@ class AgentActions:
                 if outcome.tag in node_info.properties:
                     reward += Penalty.REPEAT
                 else:
-                    last_owned_at, is_currently_owned = self.__mark_node_as_owned(node_id, outcome.level, propagate=False)
+                    last_owned_at, _ = self.__mark_node_as_owned(node_id, outcome.level, propagate=False)
                     if not last_owned_at:
                         reward += float(node_info.value)
 
@@ -510,7 +532,7 @@ class AgentActions:
                     node_info.properties.append(outcome.tag)
 
             elif isinstance(outcome, model.LateralMove):
-                last_owned_at, is_currently_owned = self.__mark_node_as_owned(node_id, propagate=False)
+                last_owned_at, _ = self.__mark_node_as_owned(node_id, propagate=False)
 
                 if not last_owned_at:
                     reward += float(node_info.value)
@@ -529,31 +551,30 @@ class AgentActions:
             elif isinstance(outcome, model.DetectionPoint):
                 reward += Penalty.DECEPTION_PENALTY_FOR_AGENT
 
+            success = True
             # TOCHECK should be never true, as once we discover node_id, we should input it,
             # if target_node_id is not inside desicovered_nodes yet,
             # 1) action_mask, shoudl have excluded it 2) exploit_remote_vulnerability excludes it
             if node_id not in self._discovered_nodes:
-                self._discovered_nodes[node_id] = NodeTrackingInformation()  # ???
+                self._discovered_nodes[node_id] = NodeTrackingInformation()
 
-            lookup_key = (vulnerability_id, local_or_remote, precondition)
+            lookup_key = (vulnerability_id, local_or_remote, precondition, success)
 
             already_executed = lookup_key in self._discovered_nodes[node_id].last_attack
 
             if already_executed:
                 last_time = self._discovered_nodes[node_id].last_attack[lookup_key]
                 if node_info.last_reimaging is None or last_time >= node_info.last_reimaging:
-                    if max_reward < Penalty.REPEAT - vulnerability.cost:
-                        error_type = ErrorType.REPEATED
-                        max_precondition_index = precondition_index
-                        max_reward = Penalty.REPEAT - vulnerability.cost
-                        max_outcome = outcome
+                    if max_reward <= Penalty.REPEAT - vulnerability.cost:
+                        error_type_list.append(ErrorType.REPEATED)
+                        max_precondition_index_list.append(precondition_index)
+                        max_reward_list.append(Penalty.REPEAT - vulnerability.cost)
+                        max_outcome_list.append(outcome)
                     continue
             elif not isinstance(outcome, model.ExploitFailed):
                 reward += NEW_SUCCESSFULL_ATTACK_REWARD
 
-            # self._discovered_nodes[node_id].last_attack[lookup_key] = datetime.now()
-
-            # Update all entites
+            # Dummy update all entites, for reward evaluation
 
             newly_discovered_nodes, \
                 discovered_nodes_value, \
@@ -572,33 +593,36 @@ class AgentActions:
             if "ip.local" in str(precondition.expression) and ip_local_flag:
                 reward += SSRF
 
-            # Check first if one of outcomes is ExploitFailed
-            # ExploitFailed used for 2 cases 1) error (above) 2) deception trigger (here)
-            if isinstance(outcome, model.ExploitFailed):
-                # reward = -vulnerability.cost
-                reward += -outcome.cost if outcome.cost is not None else Penalty.FAILED_REMOTE_EXPLOIT
-                # Here process deception reward if we want
-                # But we include already possible penalty in outcome == model.DetectionPoint
-                # reward += self.deception_penalty_raise * Penalty.DECEPTION_PENALTY_FOR_AGENT * outcome.deception
-                if max_reward < reward:
-                    error_type = ErrorType.OTHER
-                    max_precondition_index = precondition_index
-                    max_reward = reward
-                    max_outcome = outcome
-                continue
-
-
-            if max_reward < reward:
+            if max_reward <= reward:
                 # print(newly_discovered_nodes, newly_discovered_credentials, newly_discovered_profiles, reward)
-                max_reward = reward
-                max_precondition_index = precondition_index
-                max_outcome = outcome  # vulnerability.outcome[max_precondition_index] if isinstance(vulnerability.outcome, list) else vulnerability.outcome
+                error_type_list.append(ErrorType.NOERROR)
+                max_reward_list.append(reward)
+                max_precondition_index_list.append(precondition_index)
+                max_outcome_list.append(outcome)  # vulnerability.outcome[max_precondition_index] if isinstance(vulnerability.outcome, list) else vulnerability.outcome
 
+            max_reward = max(max_reward_list)
+
+        ind_max_reward_candidates = np.argwhere(max_reward_list == np.amax(max_reward_list)).flatten()
+        ind_max_reward = np.random.choice(ind_max_reward_candidates)
+        max_reward, max_outcome, error_type, max_precondition_index = max_reward_list[ind_max_reward], max_outcome_list[ind_max_reward], \
+            error_type_list[ind_max_reward], max_precondition_index_list[ind_max_reward]
         # max_outcome = vulnerability.outcome[max_precondition_index] if isinstance(vulnerability.outcome, list) else vulnerability.outcome
         max_reward_string = vulnerability.reward_string[max_precondition_index] if isinstance(vulnerability.reward_string, list) else vulnerability.reward_string
         max_precondition = vulnerability.precondition[max_precondition_index] if isinstance(vulnerability.precondition, list) else vulnerability.precondition
+        if len(ind_max_reward_candidates) > 0:
+            logger.info(f"Choosing candidate max_reward with node {node_id} precondition  {str(max_precondition.expression)} among other preconditions indices {ind_max_reward_candidates}")
 
-        if max_reward <= 0:
+        if error_type != ErrorType.NOERROR:  # OR error_type == ErrorType.NOERROR OR max_reward < 0
+            if error_type != ErrorType.REPEATED:
+                lookup_key = (vulnerability_id, local_or_remote, precondition, False)
+
+                already_executed = lookup_key in self._discovered_nodes[node_id].last_attack
+                if already_executed:
+                    last_time = self._discovered_nodes[node_id].last_attack[lookup_key]
+                    if node_info.last_reimaging is None or last_time >= node_info.last_reimaging:
+                        error_type = ErrorType.REPEATED
+                        max_reward -= Penalty.REPEAT
+
             logger.warning((error_string_dict[error_type] + " => " + logger_action).format(max_reward, vulnerability_id, node_id,
                                                                                            str(profile), str(max_precondition.expression), max_reward_string))
             return False, ActionResult(reward=max_reward, outcome=max_outcome, profile=profile,
@@ -635,23 +659,10 @@ class AgentActions:
         elif isinstance(max_outcome, model.DetectionPoint):
             reward += Penalty.DECEPTION_PENALTY_FOR_AGENT
 
-        # # Check first if one of outcomes is ExploitFailed
-        # # ExploitFailed used for 2 cases 1) error (above) 2) deception trigger (here)
-        # if isinstance(outcome, model.ExploitFailed):
-        #     reward += -outcome.cost
-        #     # Here process deception reward if we want
-        #     reward += self.deception_penalty_raise * Penalty.DECEPTION_PENALTY_FOR_AGENT*outcome.deception
-        #     if max_reward < reward:
-        #         error_type = ErrorType.OTHER
-        #         max_precondition_index = precondition_index
-        #         max_reward = reward
-        #         max_outcome = outcome
-        #     continue
-
         if node_id not in self._discovered_nodes:
-            self._discovered_nodes[node_id] = NodeTrackingInformation()  # ???
+            self._discovered_nodes[node_id] = NodeTrackingInformation()
 
-        lookup_key = (vulnerability_id, local_or_remote, max_precondition)
+        lookup_key = (vulnerability_id, local_or_remote, max_precondition, True)
 
         already_executed = lookup_key in self._discovered_nodes[node_id].last_attack
 
@@ -684,7 +695,7 @@ class AgentActions:
             reward += SSRF
             logger.info("Exploiting SSRF for access to endpoints through local network!")
 
-        assert reward == max_reward, f'{reward} and {max_reward}'
+        assert reward == max_reward, f'{reward} and {max_reward}, action {node_id} {max_outcome}'
 
         return True, ActionResult(reward=max_reward, outcome=max_outcome, profile=profile,
                                   precondition=max_precondition, reward_string=max_reward_string)

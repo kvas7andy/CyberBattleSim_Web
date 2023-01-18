@@ -28,7 +28,7 @@ nodes = {
                 description="Website HTML contains information about multiple blocks leading to endpoints "
                             "AND scripts with other endpoints + variables (tags?)",
                 type=VulnerabilityType.LOCAL,
-                outcome=m.LeakedNodesId(["POST_/v2/register", "GET_/v2/messages", "GET_/v2/calendar", "GET_/v2/documents"]),  # , "GET_/v2/phonebook", "POST_ /v2/login", "GET_/v2/login", "GET_/v2"]),
+                outcome=m.LeakedNodesId(["POST_/v2/register", "GET_/v2/messages", "GET_/v2/calendar", "GET_/v2/documents", "GET_/v2/phonebook"]),  # , "POST_ /v2/login", "GET_/v2/login", "GET_/v2"]),
                 reward_string="Inspect: Viewing the web page source reveals main endpoints",
                 cost=1.0
             )),
@@ -129,8 +129,8 @@ nodes = {
                 description="Using wrong Calendar gives error message and triggers detection point",
                 precondition=m.Precondition("username.patient"),
                 type=VulnerabilityType.REMOTE,
-                outcome=m.get_dynamical_class((m.ExploitFailed,))(  # m.DetectionPoint
-                ),  # detection_point_name="calendar_point_1", discovered_profiles=["username.DorisHDunn"], "username.JanJCovington", "username.DorisHDunn"]),
+                outcome=m.get_dynamical_class((m.ExploitFailed, m.DetectionPoint))(
+                    detection_point_name="calendar_point_1"),  # , discovered_profiles=["username.DorisHDunn"], "username.JanJCovington", "username.DorisHDunn"]),
                 reward_string="No access to the endpoint (GET_/v2/calendar/outofbound_number)",
                 cost=1.0
             )),
@@ -287,20 +287,20 @@ nodes = {
     #         )
     #     )),
 
-    # "GET_/v2/phonebook": m.NodeInfo(
-    #     services=[],
-    #     value=0,
-    #     # properties=["LisaGWhite", "MarioD"],  # SO WE NEED INCLUDE all usernames into properties
-    #     vulnerabilities=OrderedDict([
-    #         # Identify GET_usage for anyuser
-    #         ("", VulnerabilityInfo(
-    #             description="DECEPTION trap: honeypot as phonebook",
-    #             type=VulnerabilityType.REMOTE,
-    #             outcome=m.get_dynamical_class((m.ExploitFailed, m.DetectionPoint))(detection_point_name="phonebook_point_1"),  # ProbeFailed is not ExploitFailed
-    #             reward_string="Cannot GET_/v2/phonebook",
-    #             cost=1.0
-    #         ))
-    #     ])),
+    "GET_/v2/phonebook": m.NodeInfo(
+        services=[],
+        value=0,
+        # properties=["LisaGWhite", "MarioD"],  # SO WE NEED INCLUDE all usernames into properties
+        vulnerabilities=OrderedDict([
+            # Identify GET_usage for anyuser
+            ("", VulnerabilityInfo(
+                description="DECEPTION trap: honeypot as phonebook",
+                type=VulnerabilityType.REMOTE,
+                outcome=m.get_dynamical_class((m.ExploitFailed, m.DetectionPoint))(detection_point_name="phonebook_point_1"),  # ProbeFailed is not ExploitFailed
+                reward_string="Cannot GET_/v2/phonebook",
+                cost=1.0
+            ))
+        ])),
 
     "GET_/v2/users": m.NodeInfo(
         services=[],  # should I leave like this?

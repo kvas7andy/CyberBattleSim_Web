@@ -95,33 +95,33 @@ TrainedLearner = TypedDict('TrainedLearner', {
     'learner': Learner,
     'trained_on': str,
     'title': str,
-    'best_eval_running_mean': float
+    'best_running_mean': float
 })
 
 
-def write_to_summary(writer, all_rewards, epsilon, loss_string, observation, iteration_count, steps_done, writer_tag = "training"):
+def write_to_summary(writer, all_rewards, epsilon, loss_string, observation, iteration_count, steps_done, writer_tag="training"):
     """
     all_rewards: - (training case) list of rewards per episode; (evaluation case) list of sum of rewards during episode
     """
 
-    is_training =  writer_tag == "training"
-    
+    is_training = writer_tag == "training"
+
     total_reward = sum(all_rewards)
-    writer.add_histogram(writer_tag+"/rewards", all_rewards, steps_done)
-    writer.add_scalar(writer_tag+"/epsilon", epsilon, steps_done) if is_training else ''
-    writer.add_scalar(writer_tag+"/loss", float(loss_string), steps_done)  if is_training and  loss_string else ''
+    writer.add_histogram(writer_tag + "/rewards", all_rewards, steps_done)
+    writer.add_scalar(writer_tag + "/epsilon", epsilon, steps_done) if is_training else ''
+    writer.add_scalar(writer_tag + "/loss", float(loss_string), steps_done) if is_training and loss_string else ''
 
     n_positive_actions = np.sum(np.array(all_rewards) > 0)
-    writer.add_scalar(writer_tag+"/n_positive_actions", n_positive_actions, steps_done)
-    writer.add_scalar(writer_tag+"/total_reward", total_reward, steps_done)
-    writer.add_text(writer_tag+"/deception_tracker", str({k: v.trigger_times for k, v in observation['_deception_tracker'].items()}), steps_done)
+    writer.add_scalar(writer_tag + "/n_positive_actions", n_positive_actions, steps_done)
+    writer.add_scalar(writer_tag + "/total_reward", total_reward, steps_done)
+    writer.add_text(writer_tag + "/deception_tracker", str({k: v.trigger_times for k, v in observation['_deception_tracker'].items()}), steps_done)
     for k, v in observation['_deception_tracker'].items():
-        writer.add_scalar(writer_tag+"/detection_points_trigger_counter/" + k, len(v.trigger_times), steps_done)
-        writer.add_histogram(writer_tag+"/detection_points_trigger_steps/" + k, 
-                np.array(v.trigger_times), steps_done, bins = iteration_count) if len(v.trigger_times) else ''
-    trigger_steps_all = np.concatenate([v.trigger_times for _, v in observation['_deception_tracker'].items()])
-    writer.add_histogram(writer_tag+"/detection_points_trigger_steps", 
-                trigger_steps_all, steps_done, bins=iteration_count) if len(trigger_steps_all) else ''
+        writer.add_scalar(writer_tag + "/detection_points_trigger_counter/" + k, len(v.trigger_times), steps_done)
+        writer.add_histogram(writer_tag + "/detection_points_trigger_steps/" + k,
+                             np.array(v.trigger_times), steps_done, bins=iteration_count) if len(v.trigger_times) else ''
+    triggers = [v.trigger_times for _, v in observation['_deception_tracker'].items()]
+    writer.add_histogram(writer_tag + "/detection_points_trigger_steps",
+                         np.concatenate(triggers), steps_done, bins=iteration_count) if len(triggers) else ''
     writer.flush()
 
 
@@ -148,6 +148,7 @@ def print_stats(stats):
     print_breakdown(stats, 'explore')
     print_breakdown(stats, 'exploit')
     print(f"  exploit deflected to exploration: {stats['exploit_deflected_to_explore']}")
+
 
 def evaluate_model(
     cyberbattle_gym_env: cyberbattle_env.CyberBattleEnv,
@@ -186,13 +187,15 @@ def evaluate_model(
     plot_title = f"{title} (epochs={eval_episode_count}, ϵ={initial_epsilon}" + learner.parameters_as_string()
 
     render_file_index = 1
-    max_mean_over_episodes = -sys.float_info.max
+    train_while_exploit_before = learner.train_while_exploit
+    learner.eval()
+    learner.train_while_exploit = False
 
     for i_episode in range(1, eval_episode_count + 1):
 
         print(f"  ## Episode: {i_episode}/{eval_episode_count} '{title}' "
               f"ϵ={epsilon:.4f}, "
-              f"{learner.parameters_as_string()}") 
+              f"{learner.parameters_as_string()}")
 
         observation = wrapped_env.reset()
         total_reward = 0.0
@@ -209,7 +212,6 @@ def evaluate_model(
 
         episode_ended_at = None
         sys.stdout.flush()
-
 
         for t in range(1, 1 + iteration_count):
 
@@ -245,7 +247,7 @@ def evaluate_model(
             total_reward += reward
             # bar.update(t, reward=total_reward)
             # if reward > 0:
-                # bar.update(t, last_reward_at=t)
+            # bar.update(t, last_reward_at=t)
 
             if verbosity == Verbosity.Verbose or (verbosity == Verbosity.Normal and reward > 0):
                 sign = ['-', '+'][reward > 0]
@@ -279,7 +281,6 @@ def evaluate_model(
         if loss_string:
             loss_string = f"loss={loss_string}"
 
-
         if episode_ended_at:
             print(f"Episode {i_episode} ended at t={episode_ended_at} total_reward {total_reward} with {loss_string}")
         else:
@@ -292,8 +293,9 @@ def evaluate_model(
         all_episodes_availability.append(all_availability)
 
         mean_over_window = np.mean(all_episodes_sum_rewards[-mean_reward_window:])
-        if max_mean_over_episodes < mean_over_window:
-            max_mean_over_episodes = mean_over_window
+        if best_eval_running_mean < mean_over_window:
+            logger.info(f"New best running mean (eval): {mean_over_window}")
+            best_eval_running_mean = mean_over_window
 
             if save_model_filename:
                 learner.save(save_model_filename.replace('.tar', f'evaluation_stepsdone_{training_steps_done + steps_done}.tar'))
@@ -307,14 +309,18 @@ def evaluate_model(
     wrapped_env.close()
     logger.info("evaluation ended\n") if configuration.log_results else None
 
+    learner.train()
+    learner.train_while_exploit = train_while_exploit_before
+
     return TrainedLearner(
         all_episodes_rewards=all_episodes_rewards,
         all_episodes_availability=all_episodes_availability,
         learner=learner,
         trained_on=cyberbattle_gym_env.name,
         title=plot_title,
-        best_eval_running_mean= best_eval_running_mean
-    )   
+        best_running_mean=best_eval_running_mean
+    )
+
 
 def epsilon_greedy_search(
     cyberbattle_gym_env: cyberbattle_env.CyberBattleEnv,
@@ -328,8 +334,8 @@ def epsilon_greedy_search(
     epsilon_multdecay: Optional[float] = None,
     epsilon_exponential_decay: Optional[int] = None,
     eval_episode_count: Optional[int] = 0,
-    eval_freq: Optional[int]  = 5,
-    mean_reward_window = 10,
+    eval_freq: Optional[int] = 5,
+    mean_reward_window=10,
     render=False,
     render_last_episode_rewards_to: Optional[str] = None,
     verbosity: Verbosity = Verbosity.Normal,
@@ -495,7 +501,7 @@ def epsilon_greedy_search(
             total_reward += reward
             bar.update(t, reward=total_reward)
             bar.update(t, epsilon=epsilon)
-            
+
             if reward > 0:
                 bar.update(t, last_reward_at=t)
 
@@ -530,8 +536,6 @@ def epsilon_greedy_search(
         if loss_string:
             loss_string = f"loss={loss_string}"
 
-
-
         if episode_ended_at:
             print(f"Episode {i_episode} ended at t={episode_ended_at} total_reward {total_reward} with {loss_string}")
         else:
@@ -541,11 +545,12 @@ def epsilon_greedy_search(
 
         # Evaluate model
         if not i_episode % eval_freq:
-            trained_learner = evaluate_model(cyberbattle_gym_env, environment_properties, learner, title, iteration_count, epsilon, 
-                        eval_episode_count, best_eval_running_mean, training_steps_done=steps_done, render=True, mean_reward_window = mean_reward_window, 
-                        render_last_episode_rewards_to= None, 
-                        verbosity = Verbosity.Quiet,save_model_filename=save_model_filename)
-            best_eval_running_mean = trained_learner['best_eval_running_mean']
+            logger.info(f"Evaluate network on step {steps_done}")
+            trained_learner_results = evaluate_model(cyberbattle_gym_env, environment_properties, learner, title, iteration_count, epsilon,
+                                                     eval_episode_count, best_eval_running_mean, training_steps_done=steps_done, render=True, mean_reward_window=mean_reward_window,
+                                                     render_last_episode_rewards_to=None,
+                                                     verbosity=Verbosity.Quiet, save_model_filename=save_model_filename)
+            best_eval_running_mean = trained_learner_results['best_running_mean']
 
         all_episodes_sum_rewards.append(sum(all_rewards))
         all_episodes_rewards.append(all_rewards)
@@ -553,6 +558,7 @@ def epsilon_greedy_search(
 
         mean_over_window = np.mean(all_episodes_sum_rewards[-mean_reward_window:])
         if best_running_mean < mean_over_window:
+            logger.info(f"New best running mean (eval): {mean_over_window}")
             best_running_mean = mean_over_window
 
             if save_model_filename:
@@ -580,7 +586,7 @@ def epsilon_greedy_search(
         learner=learner,
         trained_on=cyberbattle_gym_env.name,
         title=plot_title,
-        best_eval_running_mean = best_eval_running_mean
+        best_running_mean=best_running_mean
     )
 
 

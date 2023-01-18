@@ -3,7 +3,6 @@ import logging
 import os
 from dotenv import load_dotenv
 import datetime
-import __main__
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -50,8 +49,7 @@ class Configuration():
     def __init__(self):
         self.LOGGER_NAME = "General"
         self.logger = logging.getLogger(self.LOGGER_NAME)
-        sys_argv_0 = str(__main__.__file__)
-        log_dir = 'logs/exper/' + sys_argv_0.split('/')[-1].split('.')[0]
+        log_dir = 'logs/exper/' + "dummy_log_folder"
         # convert the datetime object to string of specific format
         datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         self.log_results = os.getenv("LOG_RESULTS", 'False').lower() in ('true', '1', 't')
