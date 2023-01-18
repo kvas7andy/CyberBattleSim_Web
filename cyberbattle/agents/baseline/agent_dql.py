@@ -498,6 +498,16 @@ class DeepQLearnerPolicy(Learner):
     def stateaction_as_string(self, action_metadata) -> str:
         return ''
 
+    def eval(self):
+        self.policy_net.eval()
+        self.target_net.eval()
+        # self.train_while_exploit = False # TODO check if that is correct
+
+    def train(self):
+        self.policy_net.train()
+        self.target_net.train()
+        # self.train_while_exploit = True # TODO check if that is correct
+
     def save(self, PATH: str, optimizer_save=False) -> None:
         logger.info("Saving policy_net, target_net " + optimizer_save * "and optimizer " + "parameters")
         if '.tar' not in PATH:
@@ -520,20 +530,20 @@ class DeepQLearnerPolicy(Learner):
         self.policy_net.eval()
         self.target_net.eval()
 
-    def load_best(self, logdir_training: str, evaluation_ckpt = True, optimizer_load=True) -> None:
-        filenames = [filename for filename in os.listdir(logdir_training) 
-                    if '.tar' in filename and ('modelevaluation'*evaluation_ckpt in filename 
-                        or 'modelevaluation'*(not evaluation_ckpt) not in filename)]
+    def load_best(self, logdir_training: str, evaluation_ckpt=True, optimizer_load=True) -> None:
+        filenames = [filename for filename in os.listdir(logdir_training)
+                     if '.tar' in filename and ('modelevaluation' * evaluation_ckpt in filename
+                                                or 'modelevaluation' * (not evaluation_ckpt) not in filename)]
         best_ind_list = [i for i, filename in enumerate(filenames) if 'stepsdone' not in filename]
         if best_ind_list:
             filename_best_ckpt = filenames[best_ind_list[0]]
         else:
-            last_best_index = np.argmax([int(filename.split('_')[-1].split('.')[0]) for filename in filenames]) # getting the stepsdone value from the learned best model
+            last_best_index = np.argmax([int(filename.split('_')[-1].split('.')[0]) for filename in filenames])  # getting the stepsdone value from the learned best model
             filename_best_ckpt = filenames[last_best_index]
-        
+
         self.load(os.path.join(logdir_training, filename_best_ckpt), optimizer_load=optimizer_load)
-        logger.info(f"Load best model from {'evaluation'*evaluation_ckpt + 'training'*(not evaluation_ckpt)} " + \
-                        " from file {os.path.join(logdir_training, filename_best_ckpt)}")
+        logger.info(f"Load best model from {'evaluation'*evaluation_ckpt + 'training'*(not evaluation_ckpt)} " +
+                    " from file {os.path.join(logdir_training, filename_best_ckpt)}")
 
     def loss_as_string(self) -> str:
         return str(getattr(self, 'loss').item()) if hasattr(self, 'loss') else ''

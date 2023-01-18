@@ -8,6 +8,10 @@
 #       format_name: percent
 #       format_version: '1.3'
 #       jupytext_version: 1.6.0
+#     kernelspec:
+#       display_name: python3
+#       language: python
+#       name: python3
 # ---
 
 # %%
@@ -29,7 +33,6 @@ import cyberbattle.agents.baseline.learner as learner
 import cyberbattle.agents.baseline.agent_wrapper as w
 import cyberbattle.agents.baseline.agent_dql as dqla
 import logging
-import __main__
 from cyberbattle.agents.baseline.agent_wrapper import ActionTrackingStateAugmentation, AgentWrapper, Verbosity
 from IPython.display import display
 import progressbar
@@ -53,8 +56,7 @@ eval_freq = int(os.getenv('EVAL_FREQ', 0))
 epsilon_exponential_decay = int(os.getenv('EPS_EXP_DECAY', max_episode_steps * 4000))  # 5000
 mean_reward_window = int(os.getenv('MEAN_REWARD_WINDOW', 10))
 
-sys_argv_0 = str(__main__.__file__)
-log_dir = 'logs/exper/' + sys_argv_0.split('/')[-1].split('.')[0]
+log_dir = 'logs/exper/' + "notebook_dql_debug_with_tinymicro"
 # convert the datetime object to string of specific format
 datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 log_dir = os.path.join(log_dir, gymid, datetime_str)
@@ -66,8 +68,7 @@ training_episode_count = int(os.environ['TRAINING_EPISODE_COUNT'])
 os.environ['LOG_DIR'] = log_dir
 os.environ['LOG_RESULTS'] = str(log_results).lower()
 
-if log_results:
-    os.makedirs(log_dir, exist_ok=True)
+os.makedirs(log_dir, exist_ok=True) if log_results else ''
 
 configuration.update_globals(log_dir, gymid, log_level, log_results)
 configuration.update_logger()
@@ -116,9 +117,9 @@ dqn_learning_run = learner.epsilon_greedy_search(
     epsilon=0.90,
     epsilon_exponential_decay=epsilon_exponential_decay,
     epsilon_minimum=0.10,
-    eval_episode_count = eval_episode_count,
-    eval_freq = eval_freq,
-    mean_reward_window = mean_reward_window,
+    eval_episode_count=eval_episode_count,
+    eval_freq=eval_freq,
+    mean_reward_window=mean_reward_window,
     verbosity=Verbosity.Quiet,
     render=False,
     render_last_episode_rewards_to=os.path.join(log_dir, 'training/') if log_results else None,
@@ -158,7 +159,7 @@ DQL_agent.policy_net.eval()
 
 current_o = ctf_env.reset()
 wrapped_env = AgentWrapper(ctf_env, ActionTrackingStateAugmentation(ep, current_o))
-# %% 
+# %%
 # Evaluate DQL agent 10 times
 for n_trial in range(10):
     # next action suggested by DQL agent

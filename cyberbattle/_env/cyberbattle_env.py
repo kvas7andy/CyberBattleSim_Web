@@ -248,7 +248,7 @@ class EnvironmentBounds(NamedTuple):
                        ):
         if not maximum_discoverable_credentials_per_action:
             maximum_discoverable_credentials_per_action = maximum_total_credentials
-        maximum_profiles_count = max((len(identifiers.profile_usernames) + 1*('NoAuth' not in identifiers.profile_usernames)) * 2, minimum_profiles_count)  # TOCHECK (... + 1) * 2 because NoAuth & the "ip.local"
+        maximum_profiles_count = max((len(identifiers.profile_usernames) + 1 * ('NoAuth' not in identifiers.profile_usernames)) * 2, minimum_profiles_count)  # TOCHECK (... + 1) * 2 because NoAuth & the "ip.local"
         vulnerabilities_dict = {}
         for vuln in identifiers.remote_vulnerabilities + identifiers.local_vulnerabilities:
             if vuln.split(':')[0] not in vulnerabilities_dict.keys():
@@ -341,7 +341,7 @@ class CyberBattleEnv(gym.Env):
         self.__discovered_nodes: List[model.NodeID] = []
         self.__discovered_profiles: List[model.Profile] = [model.Profile(username="NoAuth")]
         self.__deception_tracker: OrderedDict[str, model.DeceptionTracker] = OrderedDict(
-                                [(name, model.DeceptionTracker(name)) for name in self.identifiers.detection_point_names])
+            [(name, model.DeceptionTracker(name)) for name in self.identifiers.detection_point_names])
         self.__owned_nodes_indices_cache: Optional[List[int]] = None
         self.__credential_cache: List[model.CachedCredential] = []
         self.__episode_rewards: List[float] = []
@@ -1049,7 +1049,7 @@ class CyberBattleEnv(gym.Env):
             obs['leaked_credentials'] = self.__pad_tuple_if_requested(leaked_credentials, 4, self.__bounds.maximum_discoverable_credentials_per_action)
         # [x] observations leaked credentials Typle() not maintained with same dimension?!
         # max number credentials per action. Find where Obs is processed for unified inpuut to model.
-        
+
         if isinstance(outcome, model.LeakedProfiles):
             # update discovered nodes
             newly_discovered_profiles_count = 0
@@ -1081,7 +1081,6 @@ class CyberBattleEnv(gym.Env):
                 self.__deception_tracker[outcome.detection_point_name].trigger_times += [self.__stepcount]
             else:
                 self.__deception_tracker[outcome.detection_point_name] = model.DeceptionTracker(outcome.detection_point_name, step=self.__stepcount)
-
 
         elif isinstance(outcome, model.LateralMove):
             obs['lateral_move'] = numpy.int32(1)
