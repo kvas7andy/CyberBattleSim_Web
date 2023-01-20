@@ -617,7 +617,7 @@ class CyberBattleEnv(gym.Env):
             # actions.EdgeAnnotation)
             '_explored_network': DummySpace(sample=networkx.DiGraph()),
 
-
+            # Detection points dict to track if NN agent wants to
             '_deception_tracker': DummySpace(sample=OrderedDict([('fake_detection_point_name', model.DeceptionTracker('fake_detection_point_name'))])),
         })
 
@@ -1016,7 +1016,7 @@ class CyberBattleEnv(gym.Env):
         if isinstance(outcome, model.LeakedNodesId):
             # update discovered nodes
             newly_discovered_nodes_count = 0
-            for node in outcome.nodes:
+            for node in outcome.discovered_nodes:
                 if node not in self.__discovered_nodes:
                     self.__discovered_nodes.append(node)
                     newly_discovered_nodes_count += 1

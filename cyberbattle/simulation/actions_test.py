@@ -118,7 +118,7 @@ NODES = {
             ListNeighbors=model.VulnerabilityInfo(
                 description="reveal other nodes",
                 type=model.VulnerabilityType.LOCAL,
-                outcome=model.LeakedNodesId(nodes=['b', 'c', 'dc'])),
+                outcome=model.LeakedNodesId(discovered_nodes=['b', 'c', 'dc'])),
 
             DumpCreds=model.VulnerabilityInfo(
                 description="leaking some creds",

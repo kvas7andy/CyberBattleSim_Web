@@ -101,6 +101,10 @@ class Profile:
     # IP from which vulnerability is feasible to maintain
     ip: Optional[str] = dataclasses.field(default=None, repr=lambda: '')
 
+    def is_profile_symbol(symbol_str: str) -> bool:
+        dot_separables = symbol_str.split('.')
+        return len(dot_separables) == 2 and dot_separables[0] in [field.name for field in dataclasses.fields(Profile)] and dot_separables[-1] != ''
+
     def __str__(self) -> str:
         return "&".join(filter(None, ("&".join(key + '.' + str(value) for key, value in dataclasses.asdict(self).items() if value is not None and not isinstance(value, RolesType)),
                         "&".join("&".join(key + '.' + str(value) for value in value_list) for key, value_list in dataclasses.asdict(self).items() if value_list is not None and isinstance(value_list, RolesType)))))
@@ -276,16 +280,17 @@ class LeakedCredentials(VulnerabilityOutcome):
 class LeakedNodesId(VulnerabilityOutcome):
     """A set of node IDs obtained by exploiting a vulnerability"""
 
-    def __init__(self, nodes: List[NodeID], **kwargs):
+    def __init__(self, discovered_nodes: List[NodeID], **kwargs):
         super().__init__(**kwargs)
-        self.nodes = nodes
+        self.discovered_nodes = discovered_nodes
+
 
 class DetectionPoint(VulnerabilityOutcome):
     """Detection point to track deception tocken"""
 
     def __init__(self, detection_point_name: str, **kwargs):
         super().__init__(**kwargs)
-        self.detection_point_name = detection_point_name 
+        self.detection_point_name = detection_point_name
 
 
 VulnerabilityOutcomes = Union[
@@ -316,10 +321,14 @@ class Precondition:
         else:
             self.expression = ALGEBRA.parse(expression)
 
+    def get_properties(self) -> Set[PropertyName]:
+        return {str(symbol) for symbol in self.expression.get_symbols() if not Profile.is_profile_symbol(str(symbol))}
+
+
 class DeceptionTracker:
     """Object with saving and updating tracking of deceptive elements"""
 
-    def __init__(self, detection_point_name: str, step = None):
+    def __init__(self, detection_point_name: str, step=None):
         self.detection_point_name = detection_point_name
         self.trigger_times = [step] if step is not None else []
 
@@ -449,7 +458,9 @@ class Identifiers(NamedTuple):
     # Array of all possible profile names
     profile_usernames: List[str] = []
     # Array of all possible detection point names
-    detection_point_names: List[str] = [] 
+    detection_point_names: List[str] = []
+    # Array of properties known initially
+    initial_properties: List[PropertyName] = []
 
 
 def iterate_network_nodes(network: nx.graph.Graph) -> Iterator[Tuple[NodeID, NodeInfo]]:
@@ -503,36 +514,37 @@ def create_network(nodes: Dict[NodeID, NodeInfo]) -> nx.DiGraph:
 # Helpers to infer constants from an environment
 
 
-def profile_str_to_dict(profile_str: str) -> dict:
-    profile_dict = {}
-    type_hints = get_type_hints(Profile)
-    for symbol_str in profile_str.split('&'):
-        key, val = symbol_str.split('.')
-        if str(RolesType) in str(type_hints[key]):
-            if key in profile_dict.keys() and val not in profile_dict[key]:
-                profile_dict[key] = profile_dict[key].union({val})
-            else:
-                profile_dict[key] = {val}
-        else:
-            profile_dict[key] = val
-    return profile_dict
-
-
-def collect_ports_from_vuln(vuln: VulnerabilityInfo) -> List[PortName]:
+def collect_detection_point_name_from_vuln(vuln: VulnerabilityInfo) -> List[str]:
     """Returns all the port named referenced in a given vulnerability"""
-    if isinstance(vuln.outcome, LeakedCredentials):
-        return [c.port for c in vuln.outcome.credentials]
-    else:
-        return []
+    outcome_iter = vuln.outcome if isinstance(vuln.outcome, list) else [vuln.outcome]
+
+    return [outcome.detection_point_name for outcome in outcome_iter if isinstance(outcome, DetectionPoint)]
 
 
-def vuln_id_from_vuln(node_id: NodeID, id: VulnerabilityID, vuln_info: VulnerabilityInfo):
+def collect_detection_point_names(nodes: Iterator[Tuple[NodeID, NodeInfo]],
+                                  vulnerability_library: VulnerabilityLibrary) -> List[PortName]:
+    """Collect and return all detection point names used in a given set of nodes
+    and global vulnerability library"""
+    return sorted(list({
+        detection_point_name
+        for _, v in vulnerability_library.items()
+        for detection_point_name in collect_detection_point_name_from_vuln(v)
+    }.union({
+        detection_point_name
+        for _, node_info in nodes
+        for _, v in node_info.vulnerabilities.items()
+        for detection_point_name in collect_detection_point_name_from_vuln(v)
+    })))
+
+
+def vuln_id_from_vuln(node_id: NodeID, id: VulnerabilityID, vuln_info: VulnerabilityInfo) -> Set:
     if isinstance(vuln_info.precondition, list):
-        return {":".join([str(node_id), str(precondition.expression), str(id)])
-                if node_id else ":".join([str(precondition.expression), str(id)])
-                for precondition in vuln_info.precondition}
+        return {":".join([str(node_id), str(precondition.expression), str(id)]) if node_id else
+                ":".join([str(precondition.expression), str(id)])
+                for precondition in vuln_info.precondition}  # (Optional) Omit TRUE in precondition name: if vuln_info.precondition.expression is not Precondition("true").expression else ""])}
     else:
-        return {":".join([str(node_id), str(vuln_info.precondition.expression), str(id)]) if node_id else ":".join([str(vuln_info.precondition.expression), str(id)])}  # if vuln_info.precondition.expression is not Precondition("true").expression else ""])}
+        return {":".join([str(node_id), str(vuln_info.precondition.expression), str(id)]) if node_id else
+                ":".join([str(vuln_info.precondition.expression), str(id)])}  # (Optional) Omit TRUE in precondition name
 
 
 def collect_vulnerability_ids_from_nodes_bytype(
@@ -542,45 +554,41 @@ def collect_vulnerability_ids_from_nodes_bytype(
     """Collect and return all IDs of all vulnerability of the specified type
     that are referenced in a given set of nodes and vulnerability library
     """
-    return sorted(list(set.union(*([
+    return sorted(list(set.union(*(
         vuln_id_from_vuln(node_id, id, v)
         for node_id, node_info in nodes
         for id, v in node_info.vulnerabilities.items()
-        if v.type == type
-    ] + [set()])).union(
+        if v.type == type)).union(
         vuln_id_from_vuln(None, id, v).pop()
         for id, v in global_vulnerabilities.items()
         if v.type == type
     )))
 
 
-def collect_properties_from_nodes(nodes: Iterator[Tuple[NodeID, NodeInfo]]) -> List[PropertyName]:
+def collect_properties_from_vuln(vuln_info: VulnerabilityInfo):
+    if isinstance(vuln_info.precondition, list):
+        return set.union(*(
+            precondition.get_properties()
+            for precondition in vuln_info.precondition))
+    else:
+        return vuln_info.precondition.get_properties()
+
+
+def collect_properties_from_nodes(nodes: Iterator[Tuple[NodeID, NodeInfo]],
+                                  vulnerability_library: VulnerabilityLibrary = []) -> List[PropertyName]:
     """Collect and return sorted list of all property names used in a given set of nodes"""
-    return sorted({
-        p
-        for node_id, node_info in nodes
-        for p in node_info.properties
-    })
-
-
-def collect_ports_from_nodes(
-        nodes: Iterator[Tuple[NodeID, NodeInfo]],
-        vulnerability_library: VulnerabilityLibrary) -> List[PortName]:
-    """Collect and return all port names used in a given set of nodes
-    and global vulnerability library"""
     return sorted(list({
-        port
-        for _, v in vulnerability_library.items()
-        for port in collect_ports_from_vuln(v)
-    }.union({
-        port
-        for _, node_info in nodes
-        for _, v in node_info.vulnerabilities.items()
-        for port in collect_ports_from_vuln(v)
-    }.union(
-        {service.name
-         for _, node_info in nodes
-         for service in node_info.services}))))
+        str(property)
+        for node_id, node_info in nodes
+        for property in node_info.properties
+    }.union(*(
+        collect_properties_from_vuln(v)
+        for node_id, node_info in nodes
+        for id, v in node_info.vulnerabilities.items()
+    )).union(*(
+        collect_properties_from_vuln(v)
+        for id, v in vulnerability_library.items()
+    ))))
 
 
 def collect_profile_usernames_from_vuln(vuln: VulnerabilityInfo) -> List[str]:
@@ -613,53 +621,66 @@ def collect_profile_usernames_from_nodes(
     })))
 
 
+def collect_ports_from_vuln(vuln: VulnerabilityInfo) -> List[PortName]:
+    """Returns all the port named referenced in a given vulnerability"""
+    if isinstance(vuln.outcome, LeakedCredentials):
+        return [c.port for c in vuln.outcome.credentials]
+    else:
+        return []
+
+
+def collect_ports_from_nodes(
+        nodes: Iterator[Tuple[NodeID, NodeInfo]],
+        vulnerability_library: VulnerabilityLibrary) -> List[PortName]:
+    """Collect and return all port names used in a given set of nodes
+    and global vulnerability library"""
+    return sorted(list({
+        port
+        for _, v in vulnerability_library.items()
+        for port in collect_ports_from_vuln(v)
+    }.union({
+        port
+        for _, node_info in nodes
+        for _, v in node_info.vulnerabilities.items()
+        for port in collect_ports_from_vuln(v)
+    }.union(
+        {service.name
+         for _, node_info in nodes
+         for service in node_info.services}))))
+
+
 def collect_ports_from_environment(environment: Environment) -> List[PortName]:
     """Collect and return all port names used in a given environment"""
     return collect_ports_from_nodes(environment.nodes(), environment.vulnerability_library)
 
-def collect_detection_point_name_from_vuln(vuln: VulnerabilityInfo)-> List[str]:
-    """Returns all the port named referenced in a given vulnerability"""
-    outcome_iter = vuln.outcome if isinstance(vuln.outcome, list) else [vuln.outcome]
-
-    return [outcome.detection_point_name for outcome in outcome_iter if isinstance(outcome, DetectionPoint)]
-
-def collect_detection_point_names(nodes: Iterator[Tuple[NodeID, NodeInfo]],
-        vulnerability_library: VulnerabilityLibrary) -> List[PortName]:
-    """Collect and return all detection point names used in a given set of nodes
-    and global vulnerability library"""
-    return sorted(list({
-        detection_point_name
-        for _, v in vulnerability_library.items()
-        for detection_point_name in collect_detection_point_name_from_vuln(v)
-    }.union({
-        detection_point_name
-        for _, node_info in nodes
-        for _, v in node_info.vulnerabilities.items()
-        for detection_point_name in collect_detection_point_name_from_vuln(v)
-    })))
 
 def infer_constants_from_nodes(
         nodes: Iterator[Tuple[NodeID, NodeInfo]],
-        vulnerabilities: Dict[VulnerabilityID, VulnerabilityInfo]) -> Identifiers:
+        global_vulnerabilities: Dict[VulnerabilityID, VulnerabilityInfo],
+        global_properties: List[PropertyName] = [],
+        initial_properties: List[PropertyName] = []) -> Identifiers:
     """Infer global environment constants from a given network"""
     return Identifiers(
-        properties=collect_properties_from_nodes(nodes),
-        ports=collect_ports_from_nodes(nodes, vulnerabilities),
+        properties=sorted(list(set(collect_properties_from_nodes(nodes, global_vulnerabilities)).union(global_properties))),
+        ports=collect_ports_from_nodes(nodes, global_vulnerabilities),
         local_vulnerabilities=collect_vulnerability_ids_from_nodes_bytype(
-            nodes, vulnerabilities, VulnerabilityType.LOCAL),
+            nodes, global_vulnerabilities, VulnerabilityType.LOCAL),
         remote_vulnerabilities=collect_vulnerability_ids_from_nodes_bytype(
-            nodes, vulnerabilities, VulnerabilityType.REMOTE),
+            nodes, global_vulnerabilities, VulnerabilityType.REMOTE),
         profile_usernames=collect_profile_usernames_from_nodes(
-            nodes, vulnerabilities),
-        detection_point_names = collect_detection_point_names(nodes, vulnerabilities)
+            nodes, global_vulnerabilities),
+        detection_point_names=collect_detection_point_names(nodes, global_vulnerabilities),
+        initial_properties=initial_properties
     )
 
 
 def infer_constants_from_network(
         network: nx.Graph,
-        vulnerabilities: Dict[VulnerabilityID, VulnerabilityInfo]) -> Identifiers:
+        vulnerabilities: Dict[VulnerabilityID, VulnerabilityInfo],
+        global_properties: List[PropertyName] = [],
+        initial_properties: List[PropertyName] = []) -> Identifiers:
     """Infer global environment constants from a given network"""
-    return infer_constants_from_nodes(iterate_network_nodes(network), vulnerabilities)
+    return infer_constants_from_nodes(iterate_network_nodes(network), vulnerabilities, global_properties, initial_properties)
 
 
 # Network creation
@@ -784,3 +805,21 @@ def setup_yaml_serializer() -> None:
 
 def strkey_to_tuplekey(first_tuple_key: str, source_dict: Dict) -> Dict:
     return {(first_tuple_key, key): val for key, val in source_dict.items()}
+
+
+# Help funcitons for working with simulaiton model entities
+
+
+def profile_str_to_dict(profile_str: str) -> dict:
+    profile_dict = {}
+    type_hints = get_type_hints(Profile)
+    for symbol_str in profile_str.split('&'):
+        key, val = symbol_str.split('.')
+        if str(RolesType) in str(type_hints[key]):
+            if key in profile_dict.keys() and val not in profile_dict[key]:
+                profile_dict[key] = profile_dict[key].union({val})
+            else:
+                profile_dict[key] = {val}
+        else:
+            profile_dict[key] = val
+    return profile_dict

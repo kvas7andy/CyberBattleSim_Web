@@ -5,7 +5,7 @@
 
 """
 from cyberbattle.simulation import model as m
-from cyberbattle.simulation.model import NodeID, NodeInfo, VulnerabilityID, VulnerabilityInfo, VulnerabilityType, Profile, PropertyName
+from cyberbattle.simulation.model import NodeID, NodeInfo, VulnerabilityID, VulnerabilityInfo, VulnerabilityType, Profile
 from typing import Dict, Iterator, cast, Tuple, List
 from collections import OrderedDict
 
@@ -216,7 +216,7 @@ nodes = {
     "GET_/v2/documents": m.NodeInfo(
         services=[],
         value=0,
-        properties=["GET__v2_documents:a5db38da_156a_4d00_a041_9702db349ca5"],
+        properties=["GET_/v2/documents:a5db38da_156a_4d00_a041_9702db349ca5"],
         # properties=["LisaGWhite", "MarioD"],  # SO WE NEED INCLUDE all usernames into properties
         vulnerabilities=OrderedDict([
             # Identify GET_usage for anyuser
@@ -342,7 +342,7 @@ nodes = {
 }
 
 global_vulnerability_library: Dict[VulnerabilityID, VulnerabilityInfo] = dict([])
-global_profiles_library: List[Profile] = []
+# global_profiles_library: List[Profile] = []
 
 # Environment constants
 ENV_IDENTIFIERS = m.infer_constants_from_nodes(

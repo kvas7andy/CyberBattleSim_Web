@@ -13,7 +13,7 @@ def default_vulnerabilities() -> m.VulnerabilityLibrary:
     lib['FindDomainControllers'] = m.VulnerabilityInfo(
         description="Search for valid domain controllers in the current machines environment.",
         type=m.VulnerabilityType.LOCAL,
-        outcome=m.LeakedNodesId(nodes=["domain_controller_1"]),
+        outcome=m.LeakedNodesId(discovered_nodes=["domain_controller_1"]),
         reward_string="Found domain controllers"
     )
     lib['EnumerateFileShares'] = m.VulnerabilityInfo(
