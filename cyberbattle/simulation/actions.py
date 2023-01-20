@@ -170,55 +170,31 @@ class AgentActions:
         for node_id in self._discovered_nodes:
             yield (node_id, self._environment.get_node(node_id))
 
-    # def _check_discovered_profiles(self, profiles: List[model.Profile], precondition: model.Precondition) -> bool:
-    #     expr = precondition.expression
-    #     expr_profile_symbols = [i for i in expr.get_symbols() if '.' in str(i)]
-    #     if not len(profiles):
-    #         return len(expr_profile_symbols) == 0
-
-    #     for profile in profiles:
-    #         profile_symbols = ALGEBRA.parse(str(profile)).get_symbols()
-
-    #         true_value = ALGEBRA.parse('true')
-    #         false_value = ALGEBRA.parse('false')
-    #         mapping = {i: true_value if i in profile_symbols or '.' not in str(i) else false_value
-    #                    for i in expr.get_symbols()}
-    #         is_true: bool = cast(boolean.Expression, expr.subs(mapping)).simplify() == true_value
-    #         if is_true:
-    #             break
-    #     return is_true
-
-    def _check_discovered_profile(self, profile: model.Profile, precondition: model.Precondition) -> bool:
+    def _check_profile(self, profile: model.Profile, precondition: model.Precondition) -> bool:
         expr = precondition.expression
-        # expr_profile_symbols = [i for i in expr.get_symbols() if '.' in str(i)]
-
         profile_symbols = ALGEBRA.parse(str(profile)).get_symbols()
 
         true_value = ALGEBRA.parse('true')
         false_value = ALGEBRA.parse('false')
-        mapping = {i: true_value if i in profile_symbols or '.' not in str(i) else false_value
+        mapping = {i: true_value if not model.Profile.is_profile_symbol(str(i)) or i in profile_symbols else false_value
                    for i in expr.get_symbols()}
         is_true: bool = cast(boolean.Expression, expr.subs(mapping)).simplify() == true_value
         return is_true
 
-    def _check_prerequisites(self, target: model.NodeID, precondition: model.Precondition) -> bool:
+    def _check_properties_after_profile_check(self, target: model.NodeID, profile: model.Profile, precondition: model.Precondition) -> bool:
         """
         This is a quick helper function to check the prerequisites to see if
         they match the ones supplied.
         """
         node: model.NodeInfo = self._environment.network.nodes[target]['data']
+        node_properties = node.properties  # self.get_discovered_properties(target)  # only discovered properties, not all
 
-        node_flags = node.properties  # self.get_discovered_properties(target)  # node.properties
         expr = precondition.expression
-
-        # # TODO check which can be ommitted if switch action was before thus we need to check only CURRENT_PROFILE
-        #
-        #     if self._check_discovered_profiles(self._gathered_profiles, vulnerability.precondition):
-        #         break
+        profile_symbols = ALGEBRA.parse(str(profile)).get_symbols()
 
         true_value = ALGEBRA.parse('true')
         false_value = ALGEBRA.parse('false')
-        mapping = {i: true_value if str(i) in node_flags or '.' in str(i) else false_value
+        mapping = {i: true_value if str(i) in node_properties or model.Profile.is_profile_symbol(str(i)) and i in profile_symbols else false_value
                    for i in expr.get_symbols()}
         is_true: bool = cast(boolean.Expression, expr.subs(mapping)).simplify() == true_value
         return is_true
@@ -350,7 +326,7 @@ class AgentActions:
                     self.__annotate_edge(reference_node, credential.node, EdgeAnnotation.KNOWS)
 
         elif isinstance(outcome, model.LeakedNodesId):
-            for node_id in outcome.nodes:
+            for node_id in outcome.discovered_nodes:
                 if self.__mark_node_as_discovered(node_id, propagate=propagate):
                     newly_discovered_nodes += 1
                     newly_discovered_nodes_value += self._environment.get_node(node_id).value
@@ -484,7 +460,7 @@ class AgentActions:
                     max_outcome_list.append(model.ExploitFailed())
                 continue
 
-            if not self._check_discovered_profile(profile, precondition):
+            if not self._check_profile(profile, precondition):
                 if max_reward <= reward + Penalty.FAILED_REMOTE_EXPLOIT:
                     error_type_list.append(ErrorType.WRONG_AUTH if "username" in str(precondition.expression)
                                            else ErrorType.ROLES_WRONG)
@@ -494,7 +470,7 @@ class AgentActions:
                 continue
 
             # check vulnerability prerequisites
-            if not self._check_prerequisites(node_id, precondition):
+            if not self._check_properties_after_profile_check(node_id, profile, precondition):
                 if max_reward <= reward + failed_penalty:
                     error_type_list.append(ErrorType.PROPERTY_WRONG)
                     max_precondition_index_list.append(precondition_index)
@@ -609,8 +585,8 @@ class AgentActions:
         # max_outcome = vulnerability.outcome[max_precondition_index] if isinstance(vulnerability.outcome, list) else vulnerability.outcome
         max_reward_string = vulnerability.reward_string[max_precondition_index] if isinstance(vulnerability.reward_string, list) else vulnerability.reward_string
         max_precondition = vulnerability.precondition[max_precondition_index] if isinstance(vulnerability.precondition, list) else vulnerability.precondition
-        if len(ind_max_reward_candidates) > 0:
-            logger.info(f"Choosing candidate max_reward with node {node_id} precondition  {str(max_precondition.expression)} among other preconditions indices {ind_max_reward_candidates}")
+        if len(ind_max_reward_candidates) > 1:
+            logger.warning(f"\tChoosing candidate max_reward with node {node_id} precondition  {str(max_precondition.expression)} among other preconditions indices {ind_max_reward_candidates}")
 
         if error_type != ErrorType.NOERROR:  # OR error_type == ErrorType.NOERROR OR max_reward < 0
             if error_type != ErrorType.REPEATED:

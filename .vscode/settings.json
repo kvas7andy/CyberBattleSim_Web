@@ -56,6 +56,8 @@
     "jupyter.jupyterServerType": "local",
     "files.trimFinalNewlines": true,
     "github-enterprise.uri": "github.wdf.sap.corp",
+    "github.gitProtocol": "ssh",
+    "github.gitAuthentication": false,
     // "jupyter.kernels.filter": [],
     // "search.quickOpen.includeHistory": false,
     // "search.exclude": {

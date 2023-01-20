@@ -16,6 +16,12 @@ default_allow_rules = [
 ADMINTAG = m.AdminEscalation().tag
 SYSTEMTAG = m.SystemEscalation().tag
 
+
+global_vulnerability_library: Dict[VulnerabilityID, VulnerabilityInfo] = dict([])
+# global_profiles_library: List[Profile] = []
+global_properties: List[PropertyName] = ["state"]
+initial_properties: List[PropertyName] = [".git", "robots.txt", "thisdoesnotexist"]
+
 # Network nodes involved in the myMedcialPortal CTF
 nodes = {
     "client_browser": m.NodeInfo(
@@ -28,7 +34,10 @@ nodes = {
                 description="Website HTML contains information about multiple blocks leading to endpoints "
                             "AND scripts with other endpoints + variables (tags?)",
                 type=VulnerabilityType.LOCAL,
-                outcome=m.LeakedNodesId(["POST_/v2/register", "GET_/v2/messages", "GET_/v2/calendar", "GET_/v2/documents", "GET_/v2/phonebook"]),  # , "POST_ /v2/login", "GET_/v2/login", "GET_/v2"]),
+                outcome=m.get_dynamical_class((m.LeakedNodesId, m.ProbeSucceeded))(
+                    discovered_nodes=["POST_/v2/register", "GET_/v2/messages",
+                                      "GET_/v2/calendar", "GET_/v2/documents", "GET_/v2/phonebook", "GET_/v2"],  # "POST_ /v2/login", "GET_/v2/login", "GET_/v2"]),
+                    discovered_properties=["script_block"]),
                 reward_string="Inspect: Viewing the web page source reveals main endpoints",
                 cost=1.0
             )),
@@ -37,8 +46,7 @@ nodes = {
                 description="Website HTML contains script with rules of username configuration",
                 type=VulnerabilityType.LOCAL,
                 precondition=m.Precondition("script_block"),
-                outcome=m.LeakedNodesId(["GET_/v2/users"]),  # m.GET__dynamical_class((m.LeakedNodesId, m.CustomerData))(
-                # nodes=["GET_/v2/users"], reward=20),  # m.LeakedNodesId(["GET_/v2/users"]), #
+                outcome=m.LeakedNodesId(["GET_/v2/users"]),  # TODO Add something like leaked_roles property, or something
                 reward_string="Found script with rules of username creation from POST_/v2/register => access to GET_/v2/users",
                 cost=1.0
             ))
@@ -46,29 +54,23 @@ nodes = {
         agent_installed=True,
     ),
     # TODOMeeting !!!!!!! .cloudactivedefence property should be hidden in check_prerequisuites
-    # "GET_/v2": m.NodeInfo(
-    #     services=[],
-    #     properties=[".cloudactivedefence"],
-    #     value=10,  # owning reward
-    #     vulnerabilities=dict(
-    #         ScanBurp=VulnerabilityInfo(
-    #             description="Finding through HTTP requests special properties",
-    #             type=VulnerabilityType.REMOTE,
-    #             outcome=m.ProbeSucceeded([".cloudactivedefence"]),
-    #             #
-    #             reward_string="Found token in HTTP reqest header '.cloudactivedefence', but is it deceptive?",
-    #             cost=1.0
-    #         ),
-    #         GET_AsNoAuth=VulnerabilityInfo(
-    #             description="Cannot GET_/v2",
-    #             type=VulnerabilityType.REMOTE,
-    #             outcome=m.ExploitFailed(),
-    #             #
-    #             reward_string="Cannot GET_/v2",
-    #             reward_string="Cannot GET_/v2",
-    #             cost=1.0
-    #         )
-    #     )),
+    "GET_/v2": m.NodeInfo(
+        services=[],
+        properties=[".git", ".cloudactivedefence", "robots.txt"],
+        value=10,  # owning reward
+        vulnerabilities=OrderedDict([
+            ("", VulnerabilityInfo(
+                description="Finding through HTTP requests special properties",
+                type=VulnerabilityType.REMOTE,
+                precondition=[m.Precondition("true"), m.Precondition(".git"), m.Precondition("robots.txt"), m.Precondition("thisdoesnotexist"),
+                              m.Precondition(".cloudactivedefence"),],
+                outcome=[m.ExploitFailed()] * 4 +
+                [m.get_dynamical_class((m.ExploitFailed, m.DetectionPoint))(detection_point_name="cloudactive_defense_point1")],
+                reward_string=["Forced browsing attempts"] * 4 + ["Forced browsing attempts (detection point triggered)"],
+                cost=1.0
+            ))
+        ])
+    ),
 
     # "GET_/v2/login": m.NodeInfo(
     #     services=[],
@@ -85,7 +87,7 @@ nodes = {
     #         # )
     #     )),
 
-    # "POST_ /v2/login": m.NodeInfo(
+    # "POST_/v2/login": m.NodeInfo(
     #     services=[],
     #     value=10,  # owning reward
     #     # Vulnerability name: LOGGIN bruteforcing?
@@ -310,7 +312,7 @@ nodes = {
             ("", VulnerabilityInfo(
                 description="GET_ting Credentials",
                 type=VulnerabilityType.REMOTE,
-                precondition=m.Precondition("ip.local"),  # ~username.NoAuth&
+                precondition=m.Precondition("~username.NoAuth&ip.local"),  #
                 outcome=m.LeakedProfiles(["username.JamesMPaterson&id.68097B9D&roles.isChemist",
                                           # "username.AnotherGuyName&id.cookie233424&roles.isAssistant",
                                           # "username.JanJCovington&id.CDCEDE1C&roles.isDoctor",
@@ -341,13 +343,15 @@ nodes = {
         ]))
 }
 
-global_vulnerability_library: Dict[VulnerabilityID, VulnerabilityInfo] = dict([])
-global_profiles_library: List[Profile] = []
-
 # Environment constants
 ENV_IDENTIFIERS = m.infer_constants_from_nodes(
     cast(Iterator[Tuple[NodeID, NodeInfo]], list(nodes.items())),
-    global_vulnerability_library)
+    global_vulnerability_library,
+    global_properties,
+    initial_properties)
+
+# OR initial_properties add afterwards, like
+# ENV_IDENTIFIERS.initial_properties = initial_properties
 
 
 def new_environment() -> m.Environment:

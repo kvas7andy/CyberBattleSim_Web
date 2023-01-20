@@ -70,8 +70,8 @@ register(
     max_episode_steps=50,
 )
 
-if 'CyberBattleTinyMicro-latest' in registry.env_specs:
-    del registry.env_specs['CyberBattleTinyMicro-latest']
+if 'CyberBattleTinyMicro-v100' in registry.env_specs:
+    del registry.env_specs['CyberBattleTinyMicro-v100']
 
 register(
     id='CyberBattleTinyMicro-v100',

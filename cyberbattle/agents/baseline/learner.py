@@ -458,7 +458,11 @@ def epsilon_greedy_search(
                 '|',
                 progressbar.Variable(name='epsilon', width=4),
                 '|',
+                progressbar.Variable(name='best_eval_mean', width=4),
+                '|',
                 progressbar.Timer(),
+                '|',
+                progressbar.ETA(),
                 progressbar.Bar()
             ],
             redirect_stdout=False)
@@ -501,6 +505,7 @@ def epsilon_greedy_search(
             total_reward += reward
             bar.update(t, reward=total_reward)
             bar.update(t, epsilon=epsilon)
+            bar.update(t, best_eval_mean=best_eval_running_mean)
 
             if reward > 0:
                 bar.update(t, last_reward_at=t)
@@ -529,6 +534,7 @@ def epsilon_greedy_search(
                 break
 
         sys.stdout.flush()
+        logger.info(str(bar._format_line()))
 
         loss_string = learner.loss_as_string()
         if not only_eval_summary:

@@ -49,13 +49,13 @@ def create_network_from_smb_traffic(
         lib['FindDomainControllers'] = m.VulnerabilityInfo(
             description="Search for valid domain controllers in the current machines environment.",
             type=m.VulnerabilityType.LOCAL,
-            outcome=m.LeakedNodesId(nodes=["domain_controller_1"]),
+            outcome=m.LeakedNodesId(discovered_nodes=["domain_controller_1"]),
             reward_string="Found domain controllers"
         )
         lib['EnumerateFileShares'] = m.VulnerabilityInfo(
             description="Find all SMB shares this machine knows about.",
             type=m.VulnerabilityType.LOCAL,
-            outcome=m.LeakedNodesId(nodes=[f"share_{i}" for i in range(0, n_servers)]),
+            outcome=m.LeakedNodesId(discovered_nodes=[f"share_{i}" for i in range(0, n_servers)]),
             reward_string="Found shares"
         )
         lib["ProbeAdmin"] = m.VulnerabilityInfo(

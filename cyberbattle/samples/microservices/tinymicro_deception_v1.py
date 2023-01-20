@@ -342,7 +342,7 @@ nodes = {
 }
 
 global_vulnerability_library: Dict[VulnerabilityID, VulnerabilityInfo] = dict([])
-global_profiles_library: List[Profile] = []
+# global_profiles_library: List[Profile] = []
 
 # Environment constants
 ENV_IDENTIFIERS = m.infer_constants_from_nodes(
