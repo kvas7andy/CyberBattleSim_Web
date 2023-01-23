@@ -89,6 +89,9 @@ Observation = TypedDict(
         # 2 if an attempted probing succeeded
         'probe_result': numpy.int32,
 
+        # whether an exploit ended with error or not
+        'exploit_result': numpy.int32,
+
         # whether an escalation was completed and to which level
         'escalation': numpy.int32,
 
@@ -401,10 +404,11 @@ class CyberBattleEnv(gym.Env):
         if undefined_ports:
             raise ValueError(f"The network has references to undefined port names: {undefined_ports}")
 
-        referenced_properties = model.collect_properties_from_nodes(environment.nodes())
+        referenced_properties = model.collect_properties_from_nodes(environment.nodes(), environment.vulnerability_library)
         undefined_properties = set(referenced_properties).difference(environment.identifiers.properties)
-        if undefined_properties:
-            raise ValueError(f"The network has references to undefined property names: {undefined_properties}")
+        undefined_among_initial_properties = set(environment.identifiers.initial_properties) - set(referenced_properties)
+        if undefined_properties or undefined_among_initial_properties:
+            raise ValueError(f"The network has references to undefined property names: {undefined_properties.union(undefined_among_initial_properties)}")
 
         local_vulnerabilities = \
             model.collect_vulnerability_ids_from_nodes_bytype(
@@ -538,6 +542,8 @@ class CyberBattleEnv(gym.Env):
             'customer_data_found': spaces.MultiBinary(1),
             # whether an attempted probing succeeded or not
             'probe_result': spaces.Discrete(3),
+            # whether an attempted exploit succeeded or not
+            'exploit_result': spaces.Discrete(2),
             # Esclation result
             'escalation': spaces.Discrete(model.PrivilegeLevel.MAXIMUM + 1),
             # CTF_flag obtained on this stage
@@ -914,6 +920,7 @@ class CyberBattleEnv(gym.Env):
             ip_local_disclosure=numpy.int32(0),
             action_mask=self.__get_blank_action_mask(),
             probe_result=numpy.int32(0),
+            exploit_result=numpy.int32(0),
             credential_cache_matrix=tuple([numpy.zeros((2))] * self.__bounds.maximum_total_credentials),
             credential_cache_length=0,
             discovered_node_count=len(self.__discovered_nodes),
@@ -1091,6 +1098,8 @@ class CyberBattleEnv(gym.Env):
             obs['probe_result'] = numpy.int32(2)
         elif isinstance(outcome, model.ProbeFailed):
             obs['probe_result'] = numpy.int32(1)
+        elif isinstance(outcome, model.ExploitFailed):
+            obs['exploit_result'] = numpy.int32(1)
         # TODO include in obs ExploitFailed result to let agent_wrapper know failed actions using this outocme, instead of condition (reward < 0)
         elif isinstance(outcome, model.PrivilegeEscalation):
             obs['escalation'] = numpy.int32(outcome.level)

@@ -19,8 +19,8 @@ SYSTEMTAG = m.SystemEscalation().tag
 
 global_vulnerability_library: Dict[VulnerabilityID, VulnerabilityInfo] = dict([])
 # global_profiles_library: List[Profile] = []
-global_properties: List[PropertyName] = ["state"]
-initial_properties: List[PropertyName] = [".git", "robots.txt", "thisdoesnotexist"]
+global_properties: List[PropertyName] = ["state", "document_a5db38da", "server"]
+initial_properties: List[PropertyName] = ["property.git", "robots.txt", "thisdoesnotexist"]
 
 # Network nodes involved in the myMedcialPortal CTF
 nodes = {
@@ -36,7 +36,7 @@ nodes = {
                 type=VulnerabilityType.LOCAL,
                 outcome=m.get_dynamical_class((m.LeakedNodesId, m.ProbeSucceeded))(
                     discovered_nodes=["POST_/v2/register", "GET_/v2/messages",
-                                      "GET_/v2/calendar", "GET_/v2/documents", "GET_/v2/phonebook", "GET_/v2"],  # "POST_ /v2/login", "GET_/v2/login", "GET_/v2"]),
+                                      "GET_/v2/calendar", "GET_/v2/documents", "GET_/v2/phonebook", "GET_/v2", "POST_ /v2/login"],  # , "GET_/v2/login"]) ,
                     discovered_properties=["script_block"]),
                 reward_string="Inspect: Viewing the web page source reveals main endpoints",
                 cost=1.0
@@ -53,18 +53,18 @@ nodes = {
         ]),
         agent_installed=True,
     ),
-    # TODOMeeting !!!!!!! .cloudactivedefence property should be hidden in check_prerequisuites
+    # TODOMeeting !!!!!!! property.cloudactivedefence property should be hidden in check_prerequisuites
     "GET_/v2": m.NodeInfo(
         services=[],
-        properties=[".git", ".cloudactivedefence", "robots.txt"],
+        properties=["property.git", "property.cloudactivedefence", "robots.txt", "thisdoesnotexist"],
         value=10,  # owning reward
         vulnerabilities=OrderedDict([
-            ("", VulnerabilityInfo(
+            ("browsing_target", VulnerabilityInfo(
                 description="Finding through HTTP requests special properties",
                 type=VulnerabilityType.REMOTE,
-                precondition=[m.Precondition("true"), m.Precondition(".git"), m.Precondition("robots.txt"), m.Precondition("thisdoesnotexist"),
-                              m.Precondition(".cloudactivedefence"),],
-                outcome=[m.ExploitFailed()] * 4 +
+                precondition=[m.Precondition("true"), m.Precondition("property.git"), m.Precondition("robots.txt"), m.Precondition("thisdoesnotexist"),
+                              m.Precondition("property.cloudactivedefence"),],
+                outcome=[m.ExploitFailed()] * 4 + \
                 [m.get_dynamical_class((m.ExploitFailed, m.DetectionPoint))(detection_point_name="cloudactive_defense_point1")],
                 reward_string=["Forced browsing attempts"] * 4 + ["Forced browsing attempts (detection point triggered)"],
                 cost=1.0
@@ -72,7 +72,7 @@ nodes = {
         ])
     ),
 
-    # "GET_/v2/login": m.NodeInfo(
+    # "GET_/v2/login": m.NodeInfo( !!! #### Kindha discovers only POST /v2/login and rules for /v2/users
     #     services=[],
     #     value=10,  # owning reward
     #     vulnerabilities=dict(
@@ -87,19 +87,38 @@ nodes = {
     #         # )
     #     )),
 
-    # "POST_/v2/login": m.NodeInfo(
-    #     services=[],
-    #     value=10,  # owning reward
-    #     # Vulnerability name: LOGGIN bruteforcing?
-    #     vulnerabilities=dict(
-    #         POST_AsAdmin=VulnerabilityInfo(  # LocalUser == registered user with SESSION token, but without privilages!
-    #             description="Admin credentials are wrong",
-    #             type=VulnerabilityType.REMOTE,
-    #             outcome=m.ExploitFailed(),
-    #             reward_string="Login as admin: invalid credentials",
-    #             cost=1.0
-    #         )
-    #     )),
+    "POST_/v2/login": m.NodeInfo(
+        services=[],
+        value=10,  # owning reward
+        # Vulnerability name: LOGGIN bruteforcing?
+        vulnerabilities=OrderedDict([
+            ("", VulnerabilityInfo(
+                description="Probe admin/admin",
+                precondition=m.Precondition("username.NoAuth"),
+                type=VulnerabilityType.REMOTE,
+                outcome=m.get_dynamical_class((m.ProbeFailed, m.ExploitFailed))(),
+                reward_string="Probing admin/admin login",
+                cost=1.0
+            )),
+            ("sql_login", VulnerabilityInfo(
+                description="SQL injeciton on login field",
+                precondition=m.Precondition("username.NoAuth"),
+                type=VulnerabilityType.REMOTE,
+                outcome=m.get_dynamical_class((m.ExploitFailed, m.DetectionPoint))(detection_point_name="cloudactive_defense_point1"),  # m.CustomerData(100),
+                reward_string="SQL injeciton attack on login field",
+                # rates=m.Rates(succesRate=0.9),  # !!! Not implemented
+                cost=1.0
+            )),
+            # !!!
+            # ("sql_server", VulnerabilityInfo(
+            #     description="SQL injeciton on login field",
+            #     type=VulnerabilityType.REMOTE,
+            #     outcome=m.get_dynamical_class((m.ProbeFailed, m.ExploitFailed, ))(),
+            #     reward_string="SQL injeciton attack on login field",
+            #     rates=m.Rates(succesRate=0.9),
+            #     cost=1.0
+            # ))
+        ])),
 
     "POST_/v2/register": m.NodeInfo(
         services=[],  # should I leave like this?
@@ -118,7 +137,6 @@ nodes = {
         services=[],  # should I leave like this?
         value=0,
         vulnerabilities=OrderedDict([
-            # Identify GET_usage for anyuser
             ("", VulnerabilityInfo(
                 description="Found usernames from calendar & property",
                 precondition=m.Precondition("username.patient"),
@@ -136,14 +154,6 @@ nodes = {
                 reward_string="No access to the endpoint (GET_/v2/calendar/outofbound_number)",
                 cost=1.0
             )),
-            # TODO like example of vulnerability having wrong outcome without precondition
-            # GET_AsNoAuth=VulnerabilityInfo(
-            #     description="Authentification required",
-            #     type=VulnerabilityType.REMOTE,
-            #     outcome=m.ExploitFailed(),
-            #     reward_string="Authentification required",
-            #     cost=1.0
-            # ),
             # GET_WithOtherCalenderNum=VulnerabilityInfo(
             #     description="DECEPTION decoy: Trying other calendar nums, like GET_/v2/calendar/8 (9, 10, 11, ...)",
             #     precondition=m.Precondition("username.patient"),
@@ -209,7 +219,7 @@ nodes = {
             #     description="GET_ting messages as Mario",
             #     type=VulnerabilityType.REMOTE,
             #     precondition=m.Precondition("username.MarioDFiles&id.F5BCFE9D"),
-            #     outcome=m.ProbeSucceeded(["GET__v2_documents:a5db38da_156a_4d00_a041_9702db349ca5"]),
+            #     outcome=m.ProbeSucceeded(["document_a5db38da"]),
             #     reward_string="/v2/render is leaked",
             #     cost=1.0
             # )
@@ -218,7 +228,7 @@ nodes = {
     "GET_/v2/documents": m.NodeInfo(
         services=[],
         value=0,
-        properties=["GET__v2_documents:a5db38da_156a_4d00_a041_9702db349ca5"],
+        properties=[],
         # properties=["LisaGWhite", "MarioD"],  # SO WE NEED INCLUDE all usernames into properties
         vulnerabilities=OrderedDict([
             # Identify GET_usage for anyuser
@@ -260,7 +270,7 @@ nodes = {
     #         GET_AsDocument=VulnerabilityInfo(
     #             description="/render/http%3A%2F%2F127.0.0.1%3A8081%2Fdocuments%2Fa5db38da-156a-4d00-a041-9702db349ca5",
     #             type=VulnerabilityType.REMOTE,
-    #             precondition=m.Precondition("username.LisaGWhite&GET__v2_documents:a5db38da_156a_4d00_a041_9702db349ca5"),
+    #             precondition=m.Precondition("username.LisaGWhite&document_a5db38da"),
     #             outcome=m.CustomerData(5),
     #             reward_string="GET_ting image (not sensitive info)",
     #             cost=1.0
