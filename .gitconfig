@@ -7,16 +7,16 @@
 [core]
     whitespace = cr-at-eol,-trailing-space
 [credential]
-	helper = "!f() { /root/.vscode-server/bin/6261075646f055b99068d3688932416f2346dd3b/node /tmp/vscode-remote-containers-8698d174dce6f0b36d3ea6d7800823398043e9ad.js $*; }; f"
+	helper = "!f() { /root/.vscode-server/bin/97dec172d3256f8ca4bfb2143f3f76b503ca0534/node /tmp/vscode-remote-containers-31f78f06ced0369b69e4ee0ea76b5455f01ddd29.js $*; }; f"
 [user]
 	email = andrei.kvasov.dl@gmail.com
 	name = Andrei Kvasov
-[remote "origin"]
-        url = git@github.wdf.sap.corp:sundew/CyberBattleSim_sundew.git
-        fetch = +refs/heads/*:refs/remotes/origin/*
+[remote "upstream_sap"]
+    url = git@github.wdf.sap.corp:sundew/CyberBattleSim_sundew.git
+    fetch = +refs/heads/*:refs/remotes/origin/*
 [branch "main"]
-        remote = origin
-        merge = refs/heads/main
+    remote = origin
+    merge = refs/heads/main
 [remote "upstream"]
-        url = https://github.com/microsoft/CyberBattleSim.git
-        fetch = +refs/heads/*:refs/remotes/upstream/*
+    url = https://github.com/microsoft/CyberBattleSim.git
+    fetch = +refs/heads/*:refs/remotes/upstream/*
