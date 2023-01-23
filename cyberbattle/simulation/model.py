@@ -461,6 +461,8 @@ class Identifiers(NamedTuple):
     detection_point_names: List[str] = []
     # Array of properties known initially
     initial_properties: List[PropertyName] = []
+    # Array of just the globals
+    global_properties: List[PropertyName] = []
 
 
 def iterate_network_nodes(network: nx.graph.Graph) -> Iterator[Tuple[NodeID, NodeInfo]]:
@@ -575,7 +577,7 @@ def collect_properties_from_vuln(vuln_info: VulnerabilityInfo):
 
 
 def collect_properties_from_nodes(nodes: Iterator[Tuple[NodeID, NodeInfo]],
-                                  vulnerability_library: VulnerabilityLibrary = []) -> List[PropertyName]:
+                                  vulnerability_library: VulnerabilityLibrary) -> List[PropertyName]:
     """Collect and return sorted list of all property names used in a given set of nodes"""
     return sorted(list({
         str(property)
@@ -670,7 +672,8 @@ def infer_constants_from_nodes(
         profile_usernames=collect_profile_usernames_from_nodes(
             nodes, global_vulnerabilities),
         detection_point_names=collect_detection_point_names(nodes, global_vulnerabilities),
-        initial_properties=initial_properties
+        initial_properties=initial_properties,
+        global_properties=global_properties
     )
 
 
