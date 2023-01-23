@@ -44,17 +44,18 @@
 			"loonshot_sim.egg-info": true
 		},
 		"files.exclude": {
-			"typings/**": true,
-			".vscode-server/**": true,
-			".npm/**": true,
-			".github/**": true,
-			".pytest_cache/**": true,
 			".cache/**": true,
-			".pki/**": true,
-			".jupyter/**": true,
+			".github/**": true,
 			".ipython/**": true,
+			".jupyter/**": true,
+			".local": true,
+			".npm/**": true,
 			".nv": true,
-			".local": true
+			".pki/**": true,
+			".pytest_cache/**": true,
+			".vscode-server/**": true,
+			"**/.git": false,
+			"typings/**": true
 		},
 		"files.trimFinalNewlines": true,
 		"github-enterprise.uri": "github.wdf.sap.corp"
