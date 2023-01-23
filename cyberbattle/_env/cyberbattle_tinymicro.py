@@ -19,7 +19,7 @@ class CyberBattleTinyMicroV1(cyberbattle_env.CyberBattleEnv):
 
     def __init__(self, **kwargs):
         super().__init__(
-            initial_environment=tinymicro.new_environment(),
+            initial_environment=tinymicro_deception_v1.new_environment(),
             **kwargs)
 
 
@@ -28,5 +28,5 @@ class CyberBattleTinyMicroLatest(cyberbattle_env.CyberBattleEnv):
 
     def __init__(self, **kwargs):
         super().__init__(
-            initial_environment=tinymicro.new_environment(),
+            initial_environment=tinymicro_deception_latest.new_environment(),
             **kwargs)

@@ -162,9 +162,13 @@ class AgentActions:
         self.__ip_local = False
 
         # Mark all owned nodes as discovered
+        # Mark all initial_properties among node & global proerties as discovered_properties for this node
         for i, node in environment.nodes():
             if node.agent_installed:
                 self.__mark_node_as_owned(i, PrivilegeLevel.LocalUser)
+                intersect_with_node_and_global_properties = set(node.properties).intersection(self._environment.identifiers.initial_properties).union(
+                    set(self._environment.identifiers.global_properties).intersection(self._environment.identifiers.initial_properties))
+                self.__mark_nodeproperties_as_discovered(i, intersect_with_node_and_global_properties)
 
     def discovered_nodes(self) -> Iterator[Tuple[model.NodeID, model.NodeInfo]]:
         for node_id in self._discovered_nodes:
@@ -186,8 +190,8 @@ class AgentActions:
         This is a quick helper function to check the prerequisites to see if
         they match the ones supplied.
         """
-        node: model.NodeInfo = self._environment.network.nodes[target]['data']
-        node_properties = node.properties  # self.get_discovered_properties(target)  # only discovered properties, not all
+        # node: model.NodeInfo = self._environment.network.nodes[target]['data']
+        node_properties = self.get_discovered_properties(target)  # only discovered properties, not all ## node.properties
 
         expr = precondition.expression
         profile_symbols = ALGEBRA.parse(str(profile)).get_symbols()
@@ -258,7 +262,7 @@ class AgentActions:
 
         if node_id in self._discovered_nodes:
             if not propagate:
-                return len(properties_indices - self._discovered_nodes[node_id].discovered_properties)
+                return len(set(properties_indices) - self._discovered_nodes[node_id].discovered_properties)
 
             before_count = len(self._discovered_nodes[node_id].discovered_properties)
             self._discovered_nodes[node_id].discovered_properties = self._discovered_nodes[node_id].discovered_properties.union(properties_indices)
@@ -514,11 +518,15 @@ class AgentActions:
                     reward += float(node_info.value)
 
             elif isinstance(outcome, model.ProbeSucceeded):
+                only_global_properties = set(outcome.discovered_properties).intersection(self._environment.identifiers.global_properties)
+
                 for p in outcome.discovered_properties:
-                    assert p in node_info.properties, \
-                        f'Discovered property {p} must belong to the set of properties associated with the node.'
+                    assert p in node_info.properties or p in self._environment.identifiers.global_properties, \
+                        f'Discovered property {p} must belong to the set of properties associated with the node or global properties.'
 
                 newly_discovered_properties = self.__mark_nodeproperties_as_discovered(node_id, outcome.discovered_properties, propagate=False)
+                for discovered_node_id in self._discovered_nodes:
+                    newly_discovered_properties += self.__mark_nodeproperties_as_discovered(node_id, only_global_properties, propagate=False)
                 reward += newly_discovered_properties * PROPERTY_DISCOVERED_REWARD
 
             elif isinstance(outcome, model.CustomerData):
@@ -622,11 +630,15 @@ class AgentActions:
                 reward += float(node_info.value)
 
         elif isinstance(max_outcome, model.ProbeSucceeded):
+            only_global_properties = set(max_outcome.discovered_properties).intersection(self._environment.identifiers.global_properties)
+
             for p in max_outcome.discovered_properties:
-                assert p in node_info.properties, \
-                    f'Discovered property {p} must belong to the set of properties associated with the node.'
+                assert p in node_info.properties or p in self._environment.identifiers.global_properties, \
+                    f'Discovered property {p} must belong to the set of properties associated with the node or global properties.'
 
             newly_discovered_properties = self.__mark_nodeproperties_as_discovered(node_id, max_outcome.discovered_properties)
+            for discovered_node_id in self._discovered_nodes.keys():
+                newly_discovered_properties += self.__mark_nodeproperties_as_discovered(discovered_node_id, only_global_properties)
             reward += newly_discovered_properties * PROPERTY_DISCOVERED_REWARD
 
         elif isinstance(max_outcome, model.CustomerData):
