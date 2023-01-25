@@ -60,11 +60,13 @@ log_dir = 'logs/exper/' + "notebook_dql_debug_with_tinymicro"
 # convert the datetime object to string of specific format
 datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 log_dir = os.path.join(log_dir, gymid, datetime_str)
+checkpoint_date = None
 
 # %%
 iteration_count = max_episode_steps if iteration_count is None else iteration_count
 os.environ['TRAINING_EPISODE_COUNT'] = os.getenv('TRAINING_EPISODE_COUNT', 1000) if training_episode_count is None else training_episode_count
 training_episode_count = int(os.environ['TRAINING_EPISODE_COUNT'])
+checkpoint_date = checkpoint_date if checkpoint_date else os.getenv('CHECKPOINT_DATE', '20230124_085534')
 os.environ['LOG_DIR'] = log_dir
 os.environ['LOG_RESULTS'] = str(log_results).lower()
 
@@ -77,7 +79,7 @@ configuration.update_logger()
 #     f = open(os.devnull, 'w')
 #     sys.stdout = f
 
-progressbar.streams.wrap_stderr()
+# progressbar.streams.wrap_stderr()
 
 # %%
 ctf_env = gym.make(gymid)
@@ -141,13 +143,11 @@ logger.setLevel(logging.INFO) if log_results else ''
 
 if log_results:
     logger.info("Saving model to directory " + log_dir)
-    DQL_agent.save(os.path.join(log_dir, f"{exploit_train}_{train_while_exploit*'train_while_exploit'}_trainepisodes{training_episode_count}_checkpoint.tar"))
+    DQL_agent.save(os.path.join(log_dir, f"{exploit_train}_{train_while_exploit*'train_while_exploit'}_trainepisodes{training_episode_count}_aftertraining.tar"))
 
 
 logger.info("")
 logger.info("Now evaluate trained network")
-
-
 # %%
 # Use the trained agent to run the steps one by one
 

@@ -44,15 +44,15 @@
         "**/.pytest_cache/**": true,
         "**/.cache/**": true
     },
-    // "files.exclude": {
-    //     "typings/**": true,
-    //     "venv/**": true,
-    //     "~/.vscode-server/**": true,
-    //     "~/.npm/**": true,
-    //     "~/.github/**": true,
-    //     "~/.pytest_cache/**": true,
-    //     "~/.cache/**": true
-    // },
+    "files.exclude": {
+        "typings/**": true,
+        "venv/**": true,
+        "~/.vscode-server/**": true,
+        "~/.npm/**": true,
+        "~/.github/**": true,
+        "~/.pytest_cache/**": true,
+        "~/.cache/**": true
+    },
     "jupyter.jupyterServerType": "local",
     "files.trimFinalNewlines": true,
     "github-enterprise.uri": "github.wdf.sap.corp",
