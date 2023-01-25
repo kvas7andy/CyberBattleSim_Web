@@ -100,7 +100,7 @@ nodes = {
     #     )),
 
     "POST_/v2/register": m.NodeInfo(
-        services=[],  # should I leave like this?
+        services=[],
         value=10,  # owning reward
         vulnerabilities=OrderedDict([
             ("", VulnerabilityInfo(  # LocalUser == registered user with SESSION token, but without privilages!
@@ -113,7 +113,7 @@ nodes = {
         ])),
 
     "GET_/v2/calendar": m.NodeInfo(
-        services=[],  # should I leave like this?
+        services=[],
         value=0,
         vulnerabilities=OrderedDict([
             # Identify GET_usage for anyuser
@@ -303,7 +303,7 @@ nodes = {
     #     ])),
 
     "GET_/v2/users": m.NodeInfo(
-        services=[],  # should I leave like this?
+        services=[],
         value=100,  # owning reward
         # properties=["LisaGWhite", "MarioDFiles"],  # SO WE NEED INCLUDE all usernames into properties
         vulnerabilities=OrderedDict([

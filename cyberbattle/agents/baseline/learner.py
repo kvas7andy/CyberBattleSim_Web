@@ -121,7 +121,7 @@ def write_to_summary(writer, all_rewards, epsilon, loss_string, observation, ite
                              np.array(v.trigger_times), steps_done, bins=iteration_count) if len(v.trigger_times) else ''
     triggers = [v.trigger_times for _, v in observation['_deception_tracker'].items()]
     writer.add_histogram(writer_tag + "/detection_points_trigger_steps",
-                         np.concatenate(triggers), steps_done, bins=iteration_count) if len(triggers) else ''
+                         np.concatenate(triggers), steps_done, bins=iteration_count) if len(np.concatenate(triggers)) else ''
     writer.flush()
 
 
@@ -411,6 +411,7 @@ def epsilon_greedy_search(
     wrapped_env = AgentWrapper(cyberbattle_gym_env,
                                ActionTrackingStateAugmentation(environment_properties, cyberbattle_gym_env.reset()))
     steps_done = 0
+    i_episode = 0
     plot_title = f"{title} (epochs={episode_count}, ϵ={initial_epsilon}, ϵ_min={epsilon_minimum}," \
         + (f"ϵ_multdecay={epsilon_multdecay}," if epsilon_multdecay else '') \
         + (f"ϵ_expdecay={epsilon_exponential_decay}," if epsilon_exponential_decay else '') \
@@ -421,7 +422,9 @@ def epsilon_greedy_search(
     best_running_mean = -sys.float_info.max
     best_eval_running_mean = -sys.float_info.max
 
-    for i_episode in range(1, episode_count + 1):
+    # for i_episode in range(1, episode_count + 1):
+    while steps_done <= episode_count * iteration_count:
+        i_episode += 1
 
         print(f"  ## Episode: {i_episode}/{episode_count} '{title}' "
               f"ϵ={epsilon:.4f}, "
@@ -446,19 +449,19 @@ def epsilon_greedy_search(
         bar = progressbar.ProgressBar(
             widgets=[
                 'Episode ',
-                f'{i_episode}',
+                f'{i_episode:4}',
                 '|Iteration ',
                 progressbar.Counter(),
                 '|',
-                progressbar.Variable(name='reward', width=7, precision=10),
+                progressbar.Variable(name='reward', width=7, precision=5),
                 '|',
-                progressbar.Variable(name='last_reward_at', width=4),
+                progressbar.Variable(name='last_reward_at', width=2),
                 '|',
-                progressbar.Variable(name='done_at', width=4),
+                progressbar.Variable(name='done_at', width=2),
                 '|',
-                progressbar.Variable(name='epsilon', width=4),
+                progressbar.Variable(name='epsilon', width=5, precision=3),
                 '|',
-                progressbar.Variable(name='best_eval_mean', width=4),
+                progressbar.Variable(name='best_eval_mean', width=6, precision=6),
                 '|',
                 progressbar.Timer(),
                 '|',
@@ -533,6 +536,7 @@ def epsilon_greedy_search(
                 bar.finish(dirty=True)
                 break
 
+        # Log progressbar to ligfile
         sys.stdout.flush()
         logger.info(str(bar._format_line()))
 

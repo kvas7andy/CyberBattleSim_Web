@@ -166,9 +166,8 @@ class AgentActions:
         for i, node in environment.nodes():
             if node.agent_installed:
                 self.__mark_node_as_owned(i, PrivilegeLevel.LocalUser)
-                intersect_with_node_and_global_properties = set(node.properties).intersection(self._environment.identifiers.initial_properties).union(
-                    set(self._environment.identifiers.global_properties).intersection(self._environment.identifiers.initial_properties))
-                self.__mark_nodeproperties_as_discovered(i, intersect_with_node_and_global_properties)
+                intersect_with_global_properties = list(set(self._environment.identifiers.global_properties).intersection(self._environment.identifiers.initial_properties))
+                self.__mark_nodeproperties_as_discovered(i, intersect_with_global_properties)
 
     def discovered_nodes(self) -> Iterator[Tuple[model.NodeID, model.NodeInfo]]:
         for node_id in self._discovered_nodes:
@@ -191,7 +190,7 @@ class AgentActions:
         they match the ones supplied.
         """
         # node: model.NodeInfo = self._environment.network.nodes[target]['data']
-        node_properties = self.get_discovered_properties(target)  # only discovered properties, not all ## node.properties
+        node_properties = {self._environment.identifiers.properties[p] for p in self.get_discovered_properties(target)}  # only discovered properties, not all ## node.properties
 
         expr = precondition.expression
         profile_symbols = ALGEBRA.parse(str(profile)).get_symbols()
@@ -250,15 +249,18 @@ class AgentActions:
 
     def __mark_node_as_discovered(self, node_id: model.NodeID, propagate: bool = True) -> bool:
         newly_discovered = node_id not in self._discovered_nodes
-        if propagate and propagate and newly_discovered:
+        if propagate and newly_discovered:
             logger.info('discovered node: ' + node_id)
             self._discovered_nodes[node_id] = NodeTrackingInformation()
         return newly_discovered
 
     def __mark_nodeproperties_as_discovered(self, node_id: model.NodeID, properties: List[PropertyName], propagate: bool = True):
+
+        node_info = self._environment.get_node(node_id)
+
         properties_indices = [self._environment.identifiers.properties.index(p)
                               for p in properties
-                              if p not in self.privilege_tags]
+                              if p not in self.privilege_tags and p in node_info.properties]
 
         if node_id in self._discovered_nodes:
             if not propagate:
@@ -290,7 +292,7 @@ class AgentActions:
 
         last_owned_at, is_currently_owned = self.__is_node_owned_history(node_id, node_info)
 
-        if propagate and propagate and not is_currently_owned:
+        if propagate and not is_currently_owned:
             if node_id not in self._discovered_nodes:
                 self._discovered_nodes[node_id] = NodeTrackingInformation()
             node_info.agent_installed = True
@@ -342,7 +344,7 @@ class AgentActions:
             for profile_str in outcome.discovered_profiles:
 
                 profile_dict = model.profile_str_to_dict(profile_str)
-                if "username" not in profile_dict.keys():
+                if "username" not in profile_dict.keys():  # either ip.local OR roles OR id, but only necessary to process is ip.local (below)
                     pass
                     # # TOCHECK maybe that works?
                     # self._gathered_profiles.append(model.Profile(**profile_dict))
@@ -436,7 +438,7 @@ class AgentActions:
             ErrorType.IP_LOCAL_NEEDED: "No access use VPN",
             ErrorType.ROLES_WRONG: "Error chemists or doctors only",
             # THIS should be invalid actually, for example, if DOCUMENT is not discovered
-            ErrorType.PROPERTY_WRONG: "Not discovered info",
+            ErrorType.PROPERTY_WRONG: "Not discovered property",
             ErrorType.WRONG_AUTH: "Authentification required",
             ErrorType.OTHER: "Cannot get {2}/{1}",
         }
@@ -450,7 +452,7 @@ class AgentActions:
         max_outcome_list = []
         max_precondition_index_list = []
         error_type_list = []
-        success = False
+
         for precondition, precondition_index, outcome in precond_ind_outcome_str_iter:
             reward = -vulnerability.cost
 
@@ -526,7 +528,7 @@ class AgentActions:
 
                 newly_discovered_properties = self.__mark_nodeproperties_as_discovered(node_id, outcome.discovered_properties, propagate=False)
                 for discovered_node_id in self._discovered_nodes:
-                    newly_discovered_properties += self.__mark_nodeproperties_as_discovered(node_id, only_global_properties, propagate=False)
+                    newly_discovered_properties += self.__mark_nodeproperties_as_discovered(discovered_node_id, only_global_properties, propagate=False)
                 reward += newly_discovered_properties * PROPERTY_DISCOVERED_REWARD
 
             elif isinstance(outcome, model.CustomerData):
@@ -534,17 +536,14 @@ class AgentActions:
 
             elif isinstance(outcome, model.DetectionPoint):
                 reward += Penalty.DECEPTION_PENALTY_FOR_AGENT
-
-            success = True
             # TOCHECK should be never true, as once we discover node_id, we should input it,
             # if target_node_id is not inside desicovered_nodes yet,
             # 1) action_mask, shoudl have excluded it 2) exploit_remote_vulnerability excludes it
-            if node_id not in self._discovered_nodes:
-                self._discovered_nodes[node_id] = NodeTrackingInformation()
 
-            lookup_key = (vulnerability_id, local_or_remote, precondition, success)
-
-            already_executed = lookup_key in self._discovered_nodes[node_id].last_attack
+            already_executed = False
+            if node_id in self._discovered_nodes:
+                lookup_key = (vulnerability_id, local_or_remote, precondition, True)
+                already_executed = lookup_key in self._discovered_nodes[node_id].last_attack
 
             if already_executed:
                 last_time = self._discovered_nodes[node_id].last_attack[lookup_key]
@@ -596,11 +595,11 @@ class AgentActions:
         if len(ind_max_reward_candidates) > 1:
             logger.warning(f"\tChoosing candidate max_reward with node {node_id} precondition  {str(max_precondition.expression)} among other preconditions indices {ind_max_reward_candidates}")
 
-        if error_type != ErrorType.NOERROR:  # OR error_type == ErrorType.NOERROR OR max_reward < 0
+        if error_type != ErrorType.NOERROR:  # ver2: error_type == ErrorType.NOERROR ver3: max_reward < 0
             if error_type != ErrorType.REPEATED:
                 lookup_key = (vulnerability_id, local_or_remote, precondition, False)
 
-                already_executed = lookup_key in self._discovered_nodes[node_id].last_attack
+                already_executed = node_id in self._discovered_nodes and lookup_key in self._discovered_nodes[node_id].last_attack
                 if already_executed:
                     last_time = self._discovered_nodes[node_id].last_attack[lookup_key]
                     if node_info.last_reimaging is None or last_time >= node_info.last_reimaging:
@@ -637,7 +636,7 @@ class AgentActions:
                     f'Discovered property {p} must belong to the set of properties associated with the node or global properties.'
 
             newly_discovered_properties = self.__mark_nodeproperties_as_discovered(node_id, max_outcome.discovered_properties)
-            for discovered_node_id in self._discovered_nodes.keys():
+            for discovered_node_id in self._discovered_nodes:
                 newly_discovered_properties += self.__mark_nodeproperties_as_discovered(discovered_node_id, only_global_properties)
             reward += newly_discovered_properties * PROPERTY_DISCOVERED_REWARD
 
@@ -647,12 +646,10 @@ class AgentActions:
         elif isinstance(max_outcome, model.DetectionPoint):
             reward += Penalty.DECEPTION_PENALTY_FOR_AGENT
 
-        if node_id not in self._discovered_nodes:
-            self._discovered_nodes[node_id] = NodeTrackingInformation()
-
-        lookup_key = (vulnerability_id, local_or_remote, max_precondition, True)
-
-        already_executed = lookup_key in self._discovered_nodes[node_id].last_attack
+        already_executed = False
+        if node_id in self._discovered_nodes:
+            lookup_key = (vulnerability_id, local_or_remote, max_precondition, True)
+            already_executed = lookup_key in self._discovered_nodes[node_id].last_attack
 
         if already_executed:
             last_time = self._discovered_nodes[node_id].last_attack[lookup_key]
@@ -683,7 +680,7 @@ class AgentActions:
             reward += SSRF
             logger.info("Exploiting SSRF for access to endpoints through local network!")
 
-        assert reward == max_reward, f'{reward} and {max_reward}, action {node_id} {max_outcome}'
+        assert reward == max_reward, f'{reward} and {max_reward}, action {node_id} {str(max_precondition.expression)} {str(max_outcome)}'
 
         return True, ActionResult(reward=max_reward, outcome=max_outcome, profile=profile,
                                   precondition=max_precondition, reward_string=max_reward_string)

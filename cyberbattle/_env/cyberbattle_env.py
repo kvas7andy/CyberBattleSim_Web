@@ -252,6 +252,8 @@ class EnvironmentBounds(NamedTuple):
         if not maximum_discoverable_credentials_per_action:
             maximum_discoverable_credentials_per_action = maximum_total_credentials
         maximum_profiles_count = max((len(identifiers.profile_usernames) + 1 * ('NoAuth' not in identifiers.profile_usernames)) * 2, minimum_profiles_count)  # TOCHECK (... + 1) * 2 because NoAuth & the "ip.local"
+
+        # Checking the maximum number of vulnerabilities for each node, identify which vuln names they have. This includes global vulns
         vulnerabilities_dict = {}
         for vuln in identifiers.remote_vulnerabilities + identifiers.local_vulnerabilities:
             if vuln.split(':')[0] not in vulnerabilities_dict.keys():

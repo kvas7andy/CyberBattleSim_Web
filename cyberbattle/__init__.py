@@ -48,7 +48,7 @@ register(
             'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
             'defender_goal': DefenderGoal(eviction=True),
             'maximum_total_credentials': 1,
-            'maximum_node_count': 11
+            'maximum_node_count': 9
             },
     max_episode_steps=50,
 )
@@ -65,7 +65,7 @@ register(
             'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
             'defender_goal': DefenderGoal(eviction=True),
             'maximum_total_credentials': 1,
-            'maximum_node_count': 11
+            'maximum_node_count': 9
             },
     max_episode_steps=50,
 )
@@ -81,7 +81,7 @@ register(
             'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
             'defender_goal': DefenderGoal(eviction=True),
             'maximum_total_credentials': 1,
-            'maximum_node_count': 11
+            'maximum_node_count': 9
             },
     max_episode_steps=50,
 )

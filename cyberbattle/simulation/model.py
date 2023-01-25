@@ -237,7 +237,7 @@ class ProbeSucceeded(VulnerabilityOutcome):
 
 
 class LeakedProfiles(VulnerabilityOutcome):
-    """Probing succeeded"""
+    """Leaked properties of profile"""
 
     def __init__(self, discovered_profiles: List[Profile], **kwargs):
         super().__init__(**kwargs)
@@ -560,10 +560,11 @@ def collect_vulnerability_ids_from_nodes_bytype(
         vuln_id_from_vuln(node_id, id, v)
         for node_id, node_info in nodes
         for id, v in node_info.vulnerabilities.items()
-        if v.type == type)).union(
-        vuln_id_from_vuln(None, id, v).pop()
-        for id, v in global_vulnerabilities.items()
-        if v.type == type
+        if v.type == type)).union(*(
+            vuln_id_from_vuln(node_id, id, v)
+            for node_id, _ in nodes
+            for id, v in global_vulnerabilities.items()
+            if v.type == type)
     )))
 
 
