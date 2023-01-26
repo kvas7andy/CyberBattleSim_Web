@@ -4,6 +4,7 @@
 """Learner helpers and epsilon greedy search"""
 import math
 import sys
+import os
 
 from .plotting import PlotTraining, plot_averaged_cummulative_rewards
 from .agent_wrapper import AgentWrapper, EnvironmentBounds, Verbosity, ActionTrackingStateAugmentation
@@ -121,7 +122,7 @@ def write_to_summary(writer, all_rewards, epsilon, loss_string, observation, ite
                              np.array(v.trigger_times), steps_done, bins=iteration_count) if len(v.trigger_times) else ''
     triggers = [v.trigger_times for _, v in observation['_deception_tracker'].items()]
     writer.add_histogram(writer_tag + "/detection_points_trigger_steps",
-                         np.concatenate(triggers), steps_done, bins=iteration_count) if len(np.concatenate(triggers)) else ''
+                         np.concatenate(triggers), steps_done, bins=iteration_count) if len(triggers) and len(np.concatenate(triggers)) else ''
     writer.flush()
 
 
@@ -341,7 +342,7 @@ def epsilon_greedy_search(
     verbosity: Verbosity = Verbosity.Normal,
     plot_episodes_length=True,
     save_model_filename="",
-    only_eval_summary=False,
+    only_eval_summary=False
 ) -> TrainedLearner:
     """Epsilon greedy search for CyberBattle gym environments
 
@@ -421,6 +422,7 @@ def epsilon_greedy_search(
     render_file_index = 1
     best_running_mean = -sys.float_info.max
     best_eval_running_mean = -sys.float_info.max
+    # detection_tracker_sparce_matrix = np.zer
 
     # for i_episode in range(1, episode_count + 1):
     while steps_done <= episode_count * iteration_count:
@@ -525,7 +527,7 @@ def epsilon_greedy_search(
                     and render_last_episode_rewards_to is not None \
                     and reward > 0:
                 fig = cyberbattle_gym_env.render_as_fig()
-                fig.write_image(f"{render_last_episode_rewards_to}-e{i_episode}-{render_file_index}.png")
+                fig.write_image(os.path.join(render_last_episode_rewards_to, "-e{i_episode}-{render_file_index}.png"))
                 render_file_index += 1
 
             learner.end_of_iteration(t, done)

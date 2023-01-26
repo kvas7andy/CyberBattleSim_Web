@@ -30,7 +30,6 @@ import logging
 import gym
 import datetime
 from IPython.display import display
-import cyberbattle.agents.baseline.learner as learner
 from cyberbattle.agents.baseline.agent_wrapper import ActionTrackingStateAugmentation, AgentWrapper, Verbosity
 import cyberbattle.agents.baseline.agent_wrapper as w
 from cyberbattle.simulation.config import logger, configuration
@@ -67,7 +66,7 @@ exploit_train = "exploit_train"   # "exploit_manual"
 log_dir = 'logs/exper/' + "notebook_debug_tinymicro"
 # convert the datetime object to string of specific format
 log_level = os.getenv('LOG_LEVEL', "info")
-checkpoint_name = None if os.getenv('CHECKPOINT', 'None').lower() in ('none') else os.environ['CHECKPOINT'].lower()
+checkpoint_name = 'manual' if os.getenv('CHECKPOINT', 'manual').lower() in ('manual') else os.environ['CHECKPOINT'].lower()
 iteration_count = None
 checkpoint_date = None
 
@@ -79,7 +78,10 @@ training_episode_count = int(os.environ['TRAINING_EPISODE_COUNT'])
 checkpoint_date = checkpoint_date if checkpoint_date else os.getenv('CHECKPOINT_DATE', '20230124_085534')
 datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 checkpoint_dir = os.path.join("logs/exper/" + "notebook_dql_debug_with_tinymicro", gymid, checkpoint_date)
-log_dir = os.path.join(log_dir, gymid, checkpoint_date)
+assert checkpoint_name in ('best', 'manual') or checkpoint_name.isnumeric(), f"Checkpoint name {checkpoint_name} is not manual, best or stepsdone number"
+
+log_dir = os.path.join(log_dir, gymid, checkpoint_name) if checkpoint_name == 'manual' else \
+    os.path.join(log_dir, gymid, checkpoint_date, checkpoint_name)
 os.environ['LOG_DIR'] = log_dir
 os.environ['LOG_RESULTS'] = str(log_results).lower()
 
@@ -126,14 +128,14 @@ wrapped_env = AgentWrapper(ctf_env, ActionTrackingStateAugmentation(ep, current_
 # Choosing ip.local means
 # 1) we found ip.local and registered as self.__ip_local flag;
 # 2) the profiles are still writen with ip = None, but you can use ip.local in profile_str to turn on/off SSRF action
-manual_commands = [
+optimal_commands_deception_latest = [
     {'local': ['client_browser', 'ScanPageSource']},
     {'local': ['client_browser', 'ScanBlockRegister']},
     {'remote': ['client_browser', 'POST_/v2/register', "username.NoAuth", ""]},
-    {'remote': ['client_browser', 'GET_/v2/calendar', "username.patient&id.UUIDfake", ""]},
-    {'remote': ['client_browser', 'GET_/v2/users', "username.LisaGWhite", "username"]},
+    {'remote': ['client_browser', 'GET_/v2/calendar', "username.patient&id.UUIDfake", "ValidWeekday"]},
+    {'remote': ['client_browser', 'GET_/v2/users', "username.LisaGWhite", "Username"]},
     {'remote': ['client_browser', 'GET_/v2/messages', "username.LisaGWhite&id.994D5244&roles.isDoctor", ""]},
-    {'remote': ['client_browser', 'GET_/v2/users', "username.MarioDFiles", "username"]},
+    {'remote': ['client_browser', 'GET_/v2/users', "username.MarioDFiles", "Username"]},
     {'remote': ['client_browser', 'GET_/v2/messages', "username.MarioDFiles&id.F5BCFE9D&roles.isDoctor", ""]},
     # {'remote': ['client_browser', 'GET_/v2/users', "username.LisaGWhite&id.994D5244&roles.isDoctor", ""]}, # redundant actions
     {'remote': ['client_browser', 'GET_/v2/users', "username.LisaGWhite&id.994D5244&roles.isDoctor&ip.local", ""]},
@@ -141,8 +143,26 @@ manual_commands = [
     # {'remote': ['client_browser', 'GET_/v2/messages', "username.LisaGWhite&id.994D5244&roles.isDoctor&ip.local", ""]}, # redundant actions
     {'remote': ['client_browser', 'GET_/v2/documents', "username.JamesMPaterson&id.68097B9D&roles.isChemist", ""]},
 ]
+# manual_commands_v0 = [  # no deception
+# {'local': ['client_browser', 'ScanPageSource']},
+# {'local': ['client_browser', 'ScanBlockRegister']},
+# {'remote': ['client_browser', 'POST_/v2/register', "username.NoAuth", ""]},
+# {'remote': ['client_browser', 'GET_/v2/calendar', "username.patient&id.UUIDfake", ""]},
+# {'remote': ['client_browser', 'GET_/v2/users', "username.LisaGWhite", "username"]},
+# {'remote': ['client_browser', 'GET_/v2/messages', "username.LisaGWhite&id.994D5244&roles.isDoctor", ""]},
+# {'remote': ['client_browser', 'GET_/v2/users', "username.MarioDFiles", "username"]},
+# {'remote': ['client_browser', 'GET_/v2/messages', "username.MarioDFiles&id.F5BCFE9D&roles.isDoctor", ""]},
+# # {'remote': ['client_browser', 'GET_/v2/users', "username.LisaGWhite&id.994D5244&roles.isDoctor", ""]}, # redundant actions
+# {'remote': ['client_browser', 'GET_/v2/users', "username.LisaGWhite&id.994D5244&roles.isDoctor&ip.local", ""]},
+# # {'remote': ['client_browser', 'GET_/v2/users', "username.MarioDFiles&id.F5BCFE9D&roles.isDoctor&ip.local", "username"]}, # redundant actions
+# # {'remote': ['client_browser', 'GET_/v2/messages', "username.LisaGWhite&id.994D5244&roles.isDoctor&ip.local", ""]}, # redundant actions
+# {'remote': ['client_browser', 'GET_/v2/documents', "username.JamesMPaterson&id.68097B9D&roles.isChemist", ""]},
+# ]
 
-if checkpoint_name is not None:
+manual_commands = optimal_commands_deception_latest
+
+# %%
+if checkpoint_name != 'manual':
     learning_rate = 0.01  # 0.01
     gamma = 0.015  # 0.015
     DQL_agent = dqla.DeepQLearnerPolicy(
@@ -151,15 +171,14 @@ if checkpoint_name is not None:
         replay_memory_size=10000,
         target_update=5,
         batch_size=512,
-        learning_rate=learning_rate  # torch default learning rate is 1e-2
+        learning_rate=learning_rate,  # torch default learning rate is 1e-2
+        train_while_exploit=train_while_exploit
     )
     if checkpoint_name == 'best':
         DQL_agent.load_best(os.path.join(checkpoint_dir, 'training'))
     elif checkpoint_name.isnumeric():
         DQL_agent.load(os.path.join(checkpoint_dir, 'training',
                                     f'exploit_train__trainepisodes{training_episode_count}_best_modelevaluation_stepsdone_{checkpoint_name}.tar'))
-    else:
-        raise ValueError(f"Checkpoint name {checkpoint_name} is not none, best or stepsdone number")
     DQL_agent.train_while_exploit = False
     DQL_agent.policy_net.eval()
 
@@ -169,12 +188,12 @@ done = False
 total_reward = 0
 for i in range(max(max_steps, len(manual_commands))):
     wrapped_env.render(mode='rgb_array', filename=None if not log_results else
-                       os.path.join(log_dir, f'{exploit_train}_{train_while_exploit*"train_while_exploit"}_step{i}_checkpoint{checkpoint_name}_episodes_output_result.png'))
+                       os.path.join(log_dir, f'{exploit_train}_{train_while_exploit*"ExploitUdpates"}_s{i}_chkpt{checkpoint_name}_network.png'))
     logger.info("")
     if done:
         break
     # run the suggested action or exploited action
-    action_style, next_action, _ = DQL_agent.exploit(wrapped_env, current_o) if checkpoint_name else  \
+    action_style, next_action, _ = DQL_agent.exploit(wrapped_env, current_o) if checkpoint_name != 'manual' else  \
         wrapped_env.pretty_print_to_internal_action(manual_commands[i])
 
     if next_action is None:
@@ -187,6 +206,7 @@ for i in range(max(max_steps, len(manual_commands))):
               reward, total_reward,
               action_str, action_style, info['precondition_str'], info['profile_str'], info["reward_string"]))
 
+
 df = pd.DataFrame(h, columns=["Step", "Reward", "Cumulative Reward", "Next action", "Processed by", "Precondition", "Profile", "Reward string"])
 df.set_index("Step", inplace=True)
 pd.set_option("max_colwidth", 80)
@@ -195,10 +215,10 @@ if log_results:
 
 if log_results:
     os.makedirs(log_dir, exist_ok=True)
-    df.to_csv(os.path.join(log_dir, f'{exploit_train}_{train_while_exploit*"train_while_exploit"}_step{i}_checkpoint{checkpoint_name}_episodes_actions.csv'))  # ,
+    df.to_csv(os.path.join(log_dir, f'{exploit_train}_{train_while_exploit*"ExploitUdpates"}_s{i}_chkpt{checkpoint_name}_action.csv'))  # ,
     # index=False)
 print(f'len: {len(h)}, cumulative reward: {total_reward}')
 
 # %%
 wrapped_env.render(mode='rgb_array' if not log_results else 'human', filename=None if not log_results else
-                   os.path.join(log_dir, f'{exploit_train}_{train_while_exploit*"train_while_exploit"}_checkpoint{checkpoint_name}_episodes_discovered_network.png'))
+                   os.path.join(log_dir, f'{exploit_train}_{train_while_exploit*"ExploitUdpates"}_chkpt{checkpoint_name}_network.png'))

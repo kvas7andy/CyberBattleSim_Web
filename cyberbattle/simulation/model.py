@@ -101,13 +101,26 @@ class Profile:
     # IP from which vulnerability is feasible to maintain
     ip: Optional[str] = dataclasses.field(default=None, repr=lambda: '')
 
+    @staticmethod
     def is_profile_symbol(symbol_str: str) -> bool:
         dot_separables = symbol_str.split('.')
         return len(dot_separables) == 2 and dot_separables[0] in [field.name for field in dataclasses.fields(Profile)] and dot_separables[-1] != ''
 
+    @staticmethod
+    def is_role_symbol(symbol_str: str) -> bool:
+        return Profile.is_profile_symbol(symbol_str) and 'roles' in symbol_str
+
+    @staticmethod
+    def is_auth_symbol(symbol_str: str) -> bool:
+        return Profile.is_profile_symbol(symbol_str) and ('username' in symbol_str or 'id' in symbol_str)
+
     def __str__(self) -> str:
-        return "&".join(filter(None, ("&".join(key + '.' + str(value) for key, value in dataclasses.asdict(self).items() if value is not None and not isinstance(value, RolesType)),
-                        "&".join("&".join(key + '.' + str(value) for value in value_list) for key, value_list in dataclasses.asdict(self).items() if value_list is not None and isinstance(value_list, RolesType)))))
+        return "&".join(filter(None, ("&".join(key + '.' + str(value)
+                                               for key, value in dataclasses.asdict(self).items()
+                                               if value is not None and not isinstance(value, RolesType)),
+                                      "&".join("&".join(key + '.' + str(value) for value in value_list)
+                                               for key, value_list in dataclasses.asdict(self).items()
+                                               if value_list is not None and isinstance(value_list, RolesType)))))
 
     def __le__(self, other) -> bool:
         for k, v in self.__dict__.items():
@@ -169,7 +182,7 @@ class Memoize:
 
 
 @Memoize
-def get_dynamical_class(base):
+def concatenate_outcomes(base):
 
     class DynamicalClass(*base):
         def __init__(self, **kwargs):
@@ -324,6 +337,10 @@ class Precondition:
     def get_properties(self) -> Set[PropertyName]:
         return {str(symbol) for symbol in self.expression.get_symbols() if not Profile.is_profile_symbol(str(symbol))}
 
+    def need_roles(self):
+        symbols = [str(symbol) for symbol in self.expression.get_symbols()]
+        return 'roles.isDoctor' in symbols, 'roles.isChemist' in symbols  # logic: roles are always included WIHTOUT ~(NOT)
+
 
 class DeceptionTracker:
     """Object with saving and updating tracking of deceptive elements"""
@@ -472,6 +489,13 @@ def iterate_network_nodes(network: nx.graph.Graph) -> Iterator[Tuple[NodeID, Nod
         yield nodeid, node_data
 
 
+class EdgeAnnotation(Enum):
+    """Annotation added to the network edges created as the simulation is played"""
+    KNOWS = 0
+    REMOTE_EXPLOIT = 1
+    LATERAL_MOVE = 2
+
+
 # NOTE: Using `NameTuple` instead of `dataclass` breaks deserialization
 # with PyYaml 2.8.1 due to a new recrusive references to the networkx graph in the field
 #   edges: !!python/object:networkx.classes.reportviews.EdgeView
@@ -499,11 +523,13 @@ class Environment:
 
     def plot_environment_graph(self) -> None:
         """Plot the full environment graph"""
+        styles = dict(zip([e.value for e in EdgeAnnotation], ['-', '.', ':']))
         nx.draw(self.network,
                 with_labels=True,
                 node_color=[n['data'].value
                             for i, n in
                             self.network.nodes.items()],
+                style=[styles[n.kind] for i, n in self.network.edges.items()],
                 cmap=plt.cm.Oranges)  # type:ignore
 
 
