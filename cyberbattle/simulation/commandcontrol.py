@@ -10,6 +10,7 @@ is installed, execute actions on the machine.
 import networkx as nx
 from typing import List, Optional, Dict, Union, Tuple, Set
 import plotly.graph_objects as go
+from cyberbattle.simulation.config import logger, configuration
 
 from . import model, actions
 
@@ -194,6 +195,12 @@ class EnvironmentDebugging:
                 return color_map[data['kind']]
             return 'black'
 
+        def edge_width(source: model.NodeID, target: model.NodeID) -> str:
+            data = self.__environment.network.get_edge_data(source, target)
+            if 'kind' in data:
+                return data['kind'].value + 1
+            return 5
+
         layout: dict = dict(title="CyberBattle simulation", font=dict(size=10), showlegend=True,
                             autosize=False, width=800, height=400,
                             margin=go.layout.Margin(l=2, r=2, b=15, t=35),
@@ -208,11 +215,11 @@ class EnvironmentDebugging:
                                 showarrow=True,
                                 arrowhead=1,
                                 arrowsize=1,
-                                arrowwidth=1,
+                                arrowwidth=edge_width(source, target),
                                 startstandoff=10,
                                 standoff=10,
                                 align='center',
-                                opacity=1
+                                opacity=0.5
                             ) for (source, target) in list(subgraph.edges)]
                             )
 

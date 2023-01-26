@@ -14,6 +14,7 @@ from datetime import time, datetime
 from boolean import boolean
 from collections import OrderedDict
 import sys
+import re
 from enum import Enum
 from typing import Iterator, List, Optional, Set, Tuple, Dict, TypedDict, cast
 from IPython.display import display
@@ -95,13 +96,14 @@ SSRF = 15
 
 
 class ErrorType(Enum):
+    NOERROR = -1
+    OTHER = 0
     IP_LOCAL_NEEDED = 1
     ROLES_WRONG = 2
     REPEATED = 3
     PROPERTY_WRONG = 4
     WRONG_AUTH = 5
-    OTHER = 0
-    NOERROR = -1
+    NO_AUTH = 6
 
 
 class EdgeAnnotation(Enum):
@@ -153,7 +155,7 @@ class AgentActions:
         self._environment = environment
         self._gathered_credentials: Set[model.CredentialID] = set()
         self._gathered_profiles: List[model.Profile] = [model.Profile(username="NoAuth")]
-        self._discovered_nodes: "OrderedDict[model.NodeID, NodeTrackingInformation]" = OrderedDict()
+        self._discovered_nodes: OrderedDict[model.NodeID, NodeTrackingInformation] = OrderedDict()
         self._throws_on_invalid_actions = throws_on_invalid_actions
         self.deception_penalty_raise = False
 
@@ -173,20 +175,29 @@ class AgentActions:
         for node_id in self._discovered_nodes:
             yield (node_id, self._environment.get_node(node_id))
 
-    def _check_profile(self, profile: model.Profile, precondition: model.Precondition) -> bool:
+    def _check_profile(self, profile: model.Profile, precondition: model.Precondition) -> Tuple[bool, bool, bool]:
+        """ This is a quick helper function toc check profile macthcing with precondition, disregarding of properties in precondition
+            TODO: change logic of matching, try omit username/id/roles, rather than having True by default,
+            because of ~(NOT) in experssion"""
         expr = precondition.expression
         profile_symbols = ALGEBRA.parse(str(profile)).get_symbols()
 
         true_value = ALGEBRA.parse('true')
         false_value = ALGEBRA.parse('false')
-        mapping = {i: true_value if not model.Profile.is_profile_symbol(str(i)) or i in profile_symbols else false_value
-                   for i in expr.get_symbols()}
+        mapping = {exp_symbol: true_value if not model.Profile.is_profile_symbol(str(exp_symbol)) or exp_symbol in profile_symbols else false_value
+                   for exp_symbol in expr.get_symbols()}
+        wo_roles_mapping = {exp_symbol: true_value if not model.Profile.is_profile_symbol(str(exp_symbol)) or model.Profile.is_role_symbol(str(exp_symbol)) or exp_symbol in profile_symbols else false_value
+                            for exp_symbol in expr.get_symbols()}
+
         is_true: bool = cast(boolean.Expression, expr.subs(mapping)).simplify() == true_value
-        return is_true
+        wo_roles_is_true: bool = cast(boolean.Expression, expr.subs(wo_roles_mapping)).simplify() == true_value
+        # wo_username_true: bool = False if not is_true and wo_roles_is_true else True
+        only_roles_true: bool = np.sum(map(mapping.get, filter(re.compile("roles").match, mapping.keys())))
+        return is_true, wo_roles_is_true, only_roles_true
 
     def _check_properties_after_profile_check(self, target: model.NodeID, profile: model.Profile, precondition: model.Precondition) -> bool:
         """
-        This is a quick helper function to check the prerequisites to see if
+        This is a quick helper function to check the properties to see if
         they match the ones supplied.
         """
         # node: model.NodeInfo = self._environment.network.nodes[target]['data']
@@ -197,8 +208,8 @@ class AgentActions:
 
         true_value = ALGEBRA.parse('true')
         false_value = ALGEBRA.parse('false')
-        mapping = {i: true_value if str(i) in node_properties or model.Profile.is_profile_symbol(str(i)) and i in profile_symbols else false_value
-                   for i in expr.get_symbols()}
+        mapping = {exp_symbol: true_value if str(exp_symbol) in node_properties or model.Profile.is_profile_symbol(str(exp_symbol)) and exp_symbol in profile_symbols else false_value
+                   for exp_symbol in expr.get_symbols()}
         is_true: bool = cast(boolean.Expression, expr.subs(mapping)).simplify() == true_value
         return is_true
 
@@ -249,18 +260,21 @@ class AgentActions:
 
     def __mark_node_as_discovered(self, node_id: model.NodeID, propagate: bool = True) -> bool:
         newly_discovered = node_id not in self._discovered_nodes
+
         if propagate and newly_discovered:
             logger.info('discovered node: ' + node_id)
             self._discovered_nodes[node_id] = NodeTrackingInformation()
+            only_global_properties = self._discovered_nodes and set(list(self._discovered_nodes.items())[0][1].discovered_properties).intersection(self._environment.identifiers.global_properties)
+            self.__mark_nodeproperties_as_discovered(node_id, only_global_properties, propagate=propagate)
         return newly_discovered
 
     def __mark_nodeproperties_as_discovered(self, node_id: model.NodeID, properties: List[PropertyName], propagate: bool = True):
 
-        node_info = self._environment.get_node(node_id)
+        # node_info = self._environment.get_node(node_id)
 
         properties_indices = [self._environment.identifiers.properties.index(p)
                               for p in properties
-                              if p not in self.privilege_tags and p in node_info.properties]
+                              if p not in self.privilege_tags]  # and p in node_info.properties
 
         if node_id in self._discovered_nodes:
             if not propagate:
@@ -416,10 +430,11 @@ class AgentActions:
             if throw_if_vulnerability_not_present:
                 raise ValueError(f"Vulnerability '{vulnerability_id}' not supported by node='{node_id}'")
             else:
-                # THIS was only possible with target_node being random,
-                #  now everything is in action_mask, and isinvalid(...) check is done to change exploit -> explore
+                # THIS should never occure.
+                # It was only possible with target_node being random,
+                # now everything is in action_mask, and isinvalid(...) check is done to change exploit -> explore
                 logger.warning("Vulnerability '{}' not supported by node '{}'".format(vulnerability_id, node_id))
-                return False, ActionResult(reward=Penalty.SUPSPICIOUSNESS, outcome=None, profile=str(profile), precondition="", reward_string="")
+                return False, ActionResult(reward=Penalty.SUPSPICIOUSNESS, outcome=None, profile=str(profile), precondition="", reward_string="SUSPICIOUSNESS action")
 
         vulnerability = vulnerabilities[vulnerability_id]
 
@@ -436,28 +451,27 @@ class AgentActions:
         error_string_dict = {
             ErrorType.REPEATED: "Repeated action",
             ErrorType.IP_LOCAL_NEEDED: "No access use VPN",
-            ErrorType.ROLES_WRONG: "Error chemists or doctors only",
+            ErrorType.ROLES_WRONG: "Error {6} only",
             # THIS should be invalid actually, for example, if DOCUMENT is not discovered
             ErrorType.PROPERTY_WRONG: "Not discovered property",
-            ErrorType.WRONG_AUTH: "Authentification required",
+            ErrorType.WRONG_AUTH: "Wrong Authentification",
+            ErrorType.NO_AUTH: "Authentification required",
             ErrorType.OTHER: "Cannot get {2}/{1}",
         }
 
         ip_local_flag = profile.ip == "local" if profile else False  # means we choose to try local network vuln using SSRF
-
-        precond_ind_outcome_str_iter = iter(zip(precondition, range(len(precondition)), outcome)) \
-            if isinstance(precondition, list) else iter(zip([precondition], range(1), [outcome]))
-
         max_reward_list = []
         max_outcome_list = []
         max_precondition_index_list = []
         error_type_list = []
+        need_chemist, need_doctor = False, False
 
+        precond_ind_outcome_str_iter = iter(zip(precondition, range(len(precondition)), outcome)) \
+            if isinstance(precondition, list) else iter(zip([precondition], range(1), [outcome]))
         for precondition, precondition_index, outcome in precond_ind_outcome_str_iter:
             reward = -vulnerability.cost
 
             if "ip.local" in [str(i) for i in precondition.expression.get_symbols() if '.' in str(i)] and \
-                    \
                     not ip_local_flag:
                 if max_reward <= reward + Penalty.NO_VPN:
                     error_type_list.append(ErrorType.IP_LOCAL_NEEDED)
@@ -466,10 +480,12 @@ class AgentActions:
                     max_outcome_list.append(model.ExploitFailed())
                 continue
 
-            if not self._check_profile(profile, precondition):
+            is_true, wo_roles_is_true, only_roles_true = self._check_profile(profile, precondition)
+            if not is_true:
                 if max_reward <= reward + Penalty.FAILED_REMOTE_EXPLOIT:
-                    error_type_list.append(ErrorType.WRONG_AUTH if "username" in str(precondition.expression)
-                                           else ErrorType.ROLES_WRONG)
+                    error_type_list.append(ErrorType.ROLES_WRONG if wo_roles_is_true else
+                                           (ErrorType.NO_AUTH if profile.username == "NoAuth" else ErrorType.WRONG_AUTH))
+                    need_doctor, need_chemist = precondition.need_roles()
                     max_precondition_index_list.append(precondition_index)
                     max_reward_list.append(reward + failed_penalty)
                     max_outcome_list.append(model.ExploitFailed())
@@ -515,11 +531,22 @@ class AgentActions:
 
             elif isinstance(outcome, model.LateralMove):
                 last_owned_at, _ = self.__mark_node_as_owned(node_id, propagate=False)
-
                 if not last_owned_at:
                     reward += float(node_info.value)
 
-            elif isinstance(outcome, model.ProbeSucceeded):
+            elif isinstance(outcome, model.CustomerData):
+                reward += outcome.reward
+
+            elif isinstance(outcome, model.DetectionPoint):
+                reward += Penalty.DECEPTION_PENALTY_FOR_AGENT
+
+            # Dummy update all entites, for reward evaluation
+            newly_discovered_nodes, \
+                discovered_nodes_value, \
+                newly_discovered_credentials, \
+                newly_discovered_profiles, ip_local_change = self.__mark_discovered_entities(node_id, outcome, propagate=False)
+
+            if isinstance(outcome, model.ProbeSucceeded):
                 only_global_properties = set(outcome.discovered_properties).intersection(self._environment.identifiers.global_properties)
 
                 for p in outcome.discovered_properties:
@@ -528,14 +555,9 @@ class AgentActions:
 
                 newly_discovered_properties = self.__mark_nodeproperties_as_discovered(node_id, outcome.discovered_properties, propagate=False)
                 for discovered_node_id in self._discovered_nodes:
-                    newly_discovered_properties += self.__mark_nodeproperties_as_discovered(discovered_node_id, only_global_properties, propagate=False)
+                    self.__mark_nodeproperties_as_discovered(discovered_node_id, only_global_properties, propagate=False)
                 reward += newly_discovered_properties * PROPERTY_DISCOVERED_REWARD
 
-            elif isinstance(outcome, model.CustomerData):
-                reward += outcome.reward
-
-            elif isinstance(outcome, model.DetectionPoint):
-                reward += Penalty.DECEPTION_PENALTY_FOR_AGENT
             # TOCHECK should be never true, as once we discover node_id, we should input it,
             # if target_node_id is not inside desicovered_nodes yet,
             # 1) action_mask, shoudl have excluded it 2) exploit_remote_vulnerability excludes it
@@ -556,13 +578,6 @@ class AgentActions:
                     continue
             elif not isinstance(outcome, model.ExploitFailed):
                 reward += NEW_SUCCESSFULL_ATTACK_REWARD
-
-            # Dummy update all entites, for reward evaluation
-
-            newly_discovered_nodes, \
-                discovered_nodes_value, \
-                newly_discovered_credentials, \
-                newly_discovered_profiles, ip_local_change = self.__mark_discovered_entities(node_id, outcome, propagate=False)
 
             if not self.__ip_local and ip_local_change:
                 reward += IP_CHANGE_TO_IP_LOCAL
@@ -606,8 +621,8 @@ class AgentActions:
                         error_type = ErrorType.REPEATED
                         max_reward -= Penalty.REPEAT
 
-            logger.warning((error_string_dict[error_type] + " => " + logger_action).format(max_reward, vulnerability_id, node_id,
-                                                                                           str(profile), str(max_precondition.expression), max_reward_string))
+            logger.warning((error_string_dict[error_type] + " => " + logger_action).format(max_reward, vulnerability_id, node_id, str(profile), str(max_precondition.expression),
+                                                                                           max_reward_string, need_doctor * "doctors or " + (need_doctor + need_chemist) * "chemists"))
             return False, ActionResult(reward=max_reward, outcome=max_outcome, profile=profile,
                                        precondition=max_precondition, reward_string=max_reward_string)
 
@@ -628,23 +643,28 @@ class AgentActions:
             if not last_owned_at:
                 reward += float(node_info.value)
 
-        elif isinstance(max_outcome, model.ProbeSucceeded):
+        elif isinstance(outcome, model.CustomerData):
+            reward += outcome.reward
+
+        elif isinstance(max_outcome, model.DetectionPoint):
+            reward += Penalty.DECEPTION_PENALTY_FOR_AGENT
+
+            # Update all entites
+        newly_discovered_nodes, \
+            discovered_nodes_value, \
+            newly_discovered_credentials, \
+            newly_discovered_profiles, ip_local_change = self.__mark_discovered_entities(node_id, max_outcome)
+
+        if isinstance(max_outcome, model.ProbeSucceeded):
             only_global_properties = set(max_outcome.discovered_properties).intersection(self._environment.identifiers.global_properties)
 
             for p in max_outcome.discovered_properties:
                 assert p in node_info.properties or p in self._environment.identifiers.global_properties, \
                     f'Discovered property {p} must belong to the set of properties associated with the node or global properties.'
 
-            newly_discovered_properties = self.__mark_nodeproperties_as_discovered(node_id, max_outcome.discovered_properties)
             for discovered_node_id in self._discovered_nodes:
-                newly_discovered_properties += self.__mark_nodeproperties_as_discovered(discovered_node_id, only_global_properties)
+                self.__mark_nodeproperties_as_discovered(discovered_node_id, only_global_properties)
             reward += newly_discovered_properties * PROPERTY_DISCOVERED_REWARD
-
-        elif isinstance(max_outcome, model.CustomerData):
-            reward += max_outcome.reward
-
-        elif isinstance(max_outcome, model.DetectionPoint):
-            reward += Penalty.DECEPTION_PENALTY_FOR_AGENT
 
         already_executed = False
         if node_id in self._discovered_nodes:
@@ -660,12 +680,6 @@ class AgentActions:
             reward += NEW_SUCCESSFULL_ATTACK_REWARD
 
         self._discovered_nodes[node_id].last_attack[lookup_key] = datetime.now()
-
-        # Update all entites
-        newly_discovered_nodes, \
-            discovered_nodes_value, \
-            newly_discovered_credentials, \
-            newly_discovered_profiles, ip_local_change = self.__mark_discovered_entities(node_id, max_outcome)
 
         if ip_local_change:
             self.__ip_local = True

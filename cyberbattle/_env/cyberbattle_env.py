@@ -8,7 +8,6 @@ import time
 import copy
 import logging
 import sys
-import datetime
 import networkx
 from networkx import convert_matrix
 from typing import NamedTuple, Optional, Tuple, List, Dict, TypeVar, TypedDict, cast, OrderedDict
@@ -1096,6 +1095,7 @@ class CyberBattleEnv(gym.Env):
         elif isinstance(outcome, model.CustomerData):
             obs['ctf_flag'] = outcome.ctf_flag
             obs['customer_data_found'] = (numpy.int32(1),)
+            logger.info(f"Customer Data leaked {outcome.ctf_flag*'with flag'} triggered on step={self.__stepcount}!")
         elif isinstance(outcome, model.ProbeSucceeded):
             obs['probe_result'] = numpy.int32(2)
         elif isinstance(outcome, model.ProbeFailed):
@@ -1398,18 +1398,18 @@ class CyberBattleEnv(gym.Env):
             csv_filename = '.'.join(filename.split('.')[:-1] + ['csv'])
         fig = self.render_as_fig(csv_filename=csv_filename if mode not in ['no_text'] else None)
         # # requires,  pip install -U kaleido
-        fig.update_layout(
-            xaxis=dict(
-                tickmode='linear',
-                # tick0 = 0.5,
-                dtick=1  # 0.75
-            ),
-            yaxis=dict(
-                tickmode='linear',
-                # tick0 = 0.5,
-                dtick=1  # 0.75
-            )
-        )
+        # fig.update_layout(
+        #     xaxis=dict(
+        #         tickmode='linear',
+        #         # tick0 = 0.5,
+        #         dtick=1  # 0.75
+        #     ),
+        #     yaxis=dict(
+        #         tickmode='linear',
+        #         # tick0 = 0.5,
+        #         dtick=1  # 0.75
+        #     )
+        # )
         if filename:
             fig.write_image(filename)
         if mode == 'human':

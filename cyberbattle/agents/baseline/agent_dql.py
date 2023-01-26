@@ -508,16 +508,16 @@ class DeepQLearnerPolicy(Learner):
         self.target_net.train()
         # self.train_while_exploit = True # TODO check if that is correct
 
-    def save(self, PATH: str, optimizer_save=False) -> None:
+    def save(self, filename: str, optimizer_save=False) -> None:
         logger.info("Saving policy_net, target_net " + optimizer_save * "and optimizer " + "parameters")
-        if '.tar' not in PATH:
-            logger.warning("Checkpoint file should be of .tar format, got ." + PATH.split('.')[-1])
+        if '.tar' not in filename:
+            logger.warning("Checkpoint file should be of .tar format, got ." + filename.split('.')[-1])
         torch.save({**{'policy_net_state_dict': self.policy_net.state_dict(),
                     'target_net_state_dict': self.policy_net.state_dict()},
-                   **({'optimizer_state_dict': self.optimizer.state_dict()} if optimizer_save else {})}, PATH)
+                   **({'optimizer_state_dict': self.optimizer.state_dict()} if optimizer_save else {})}, filename)
 
-    def load(self, PATH: str, optimizer_load=True) -> None:
-        checkpoint = torch.load(PATH, map_location=device)
+    def load(self, filename: str, optimizer_load=True) -> None:
+        checkpoint = torch.load(filename, map_location=device)
         optimizer_saved = optimizer_load and 'optimzer_state_dict' in checkpoint.keys()
         logger.info("Loading policy_net, target_net " + optimizer_saved * "and optimizer " + "parameters")
         self.policy_net.load_state_dict(checkpoint['policy_net_state_dict'])

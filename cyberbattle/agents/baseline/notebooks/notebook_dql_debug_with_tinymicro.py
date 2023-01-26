@@ -35,7 +35,6 @@ import cyberbattle.agents.baseline.agent_dql as dqla
 import logging
 from cyberbattle.agents.baseline.agent_wrapper import ActionTrackingStateAugmentation, AgentWrapper, Verbosity
 from IPython.display import display
-import progressbar
 import gym
 from cyberbattle.simulation.config import configuration, logger
 
@@ -112,7 +111,8 @@ dqn_learning_run = learner.epsilon_greedy_search(
         replay_memory_size=10000,
         target_update=5,
         batch_size=512,  # TODO increase?
-        learning_rate=learning_rate  # torch default learning rate is 1e-2
+        learning_rate=learning_rate,  # torch default learning rate is 1e-2
+        train_while_exploit=train_while_exploit
     ),
     episode_count=training_episode_count,
     iteration_count=iteration_count,
@@ -124,11 +124,11 @@ dqn_learning_run = learner.epsilon_greedy_search(
     mean_reward_window=mean_reward_window,
     verbosity=Verbosity.Quiet,
     render=False,
-    render_last_episode_rewards_to=os.path.join(log_dir, 'training/') if log_results else None,
+    render_last_episode_rewards_to=os.path.join(log_dir, 'training') if log_results else None,
     plot_episodes_length=False,
     title="DQL",
-    save_model_filename=log_results * os.path.join(os.path.join(log_dir, 'training/'),
-                                                   f"{exploit_train}_{train_while_exploit * 'train_while_exploit'}_trainepisodes{training_episode_count}_best_model.tar")
+    save_model_filename=log_results * os.path.join(log_dir, 'training',
+                                                   f"{exploit_train}_{train_while_exploit * 'ExploitUdpates'}_te{training_episode_count}_best.tar")
 )
 
 if log_results:
@@ -143,7 +143,7 @@ logger.setLevel(logging.INFO) if log_results else ''
 
 if log_results:
     logger.info("Saving model to directory " + log_dir)
-    DQL_agent.save(os.path.join(log_dir, f"{exploit_train}_{train_while_exploit*'train_while_exploit'}_trainepisodes{training_episode_count}_aftertraining.tar"))
+    DQL_agent.save(os.path.join(log_dir, f"{exploit_train}_{train_while_exploit*'ExploitUdpates'}_te{training_episode_count}_final.tar"))
 
 
 logger.info("")
@@ -188,7 +188,7 @@ for n_trial in range(10):
         df = pd.DataFrame(h, columns=["Step", "Reward", "Cumulative Reward", "Next action", "Processed by", "Precondition", "Profile", "Reward string"])
         df.set_index("Step", inplace=True)
         if log_results:
-            df.to_csv(os.path.join(log_dir, f'{exploit_train}_{train_while_exploit*"train_while_exploit"}_trial{n_trial}_trainepisodes{training_episode_count}_output.csv'))
+            df.to_csv(os.path.join(log_dir, f'{exploit_train}_{train_while_exploit*"ExploitUdpates"}_evaln{n_trial}_te{training_episode_count}_actions.csv'))
 
     print(f'len: {len(h)}, total reward: {total_reward}')
     pd.set_option("max_colwidth", 10**3)
@@ -197,4 +197,4 @@ for n_trial in range(10):
 
     # %% if not log_results else 'human'w
     wrapped_env.render(mode='rgb_array', filename=None if not log_results else
-                       os.path.join(log_dir, f'{exploit_train}_{train_while_exploit*"train_while_exploit"}_trial{n_trial}_trainepisodes{training_episode_count}_discovered_network.png'))
+                       os.path.join(log_dir, f'{exploit_train}_{train_while_exploit*"ExploitUdpates"}_evaln{n_trial}_te{training_episode_count}_network.png'))
