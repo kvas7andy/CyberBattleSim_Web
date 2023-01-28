@@ -10,7 +10,6 @@ is installed, execute actions on the machine.
 import networkx as nx
 from typing import List, Optional, Dict, Union, Tuple, Set
 import plotly.graph_objects as go
-from cyberbattle.simulation.config import logger, configuration
 
 from . import model, actions
 

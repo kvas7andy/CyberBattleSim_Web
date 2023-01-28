@@ -192,6 +192,9 @@ def evaluate_model(
     learner.eval()
     learner.train_while_exploit = False
 
+    if configuration.log_results:
+        detection_points_results = {}
+
     for i_episode in range(1, eval_episode_count + 1):
 
         print(f"  ## Episode: {i_episode}/{eval_episode_count} '{title}' "
@@ -278,6 +281,14 @@ def evaluate_model(
         loss_string = learner.loss_as_string()
 
         write_to_summary(writer, np.array(all_rewards), epsilon, loss_string, observation, iteration_count, training_steps_done + steps_done, writer_tag="evaluation")
+        if configuration.log_results:
+            for name, deception_tracker in observation['_deception_tracker'].items():
+                detection_points_results[name] = detection_points_results.get(name, [[], [0], []])
+                _, name_indptr, _ = detection_points_results[name]
+                # if len(deception_tracker.trigger_times):
+                detection_points_results[name][1] += [name_indptr[-1] + len(deception_tracker.trigger_times)]
+                detection_points_results[name][0] += deception_tracker.trigger_times
+                detection_points_results[name][2] += [episode_ended_at if episode_ended_at else iteration_count]
 
         if loss_string:
             loss_string = f"loss={loss_string}"
@@ -298,9 +309,16 @@ def evaluate_model(
             logger.info(f"New best running mean (eval): {mean_over_window}")
             best_eval_running_mean = mean_over_window
 
+            if configuration.log_results:
+                np.savez(os.path.join(configuration.log_dir, 'training',
+                                      f'detection_points_results_eval_trainsteps{training_steps_done}.npz'),
+                         **({name + '_indices': np.array(v[0]) for name, v in detection_points_results.items()} |
+                            {name + '_indptr': np.array(v[1]) for name, v in detection_points_results.items()} |
+                            {name + '_eplength': np.array(v[2]) for name, v in detection_points_results.items()}))
+
             if save_model_filename:
-                learner.save(save_model_filename.replace('.tar', f'evaluation_stepsdone_{training_steps_done + steps_done}.tar'))
-                learner.save(save_model_filename.replace('.tar', f'evaluation.tar'))
+                learner.save(save_model_filename.replace('.tar', f'_eval_steps{training_steps_done + steps_done}.tar'))
+                learner.save(save_model_filename.replace('.tar', '_eval_best.tar'))
 
         length = episode_ended_at if episode_ended_at else iteration_count
         learner.end_of_episode(i_episode=i_episode, t=length)
@@ -343,6 +361,8 @@ def epsilon_greedy_search(
     plot_episodes_length=True,
     save_model_filename="",
     only_eval_summary=False
+
+
 ) -> TrainedLearner:
     """Epsilon greedy search for CyberBattle gym environments
 
@@ -423,6 +443,8 @@ def epsilon_greedy_search(
     best_running_mean = -sys.float_info.max
     best_eval_running_mean = -sys.float_info.max
     # detection_tracker_sparce_matrix = np.zer
+
+    detection_points_results = {}
 
     # for i_episode in range(1, episode_count + 1):
     while steps_done <= episode_count * iteration_count:
@@ -527,7 +549,7 @@ def epsilon_greedy_search(
                     and render_last_episode_rewards_to is not None \
                     and reward > 0:
                 fig = cyberbattle_gym_env.render_as_fig()
-                fig.write_image(os.path.join(render_last_episode_rewards_to, "-e{i_episode}-{render_file_index}.png"))
+                fig.write_image(os.path.join(render_last_episode_rewards_to, f"e{i_episode}-s{render_file_index}.png"))
                 render_file_index += 1
 
             learner.end_of_iteration(t, done)
@@ -545,6 +567,16 @@ def epsilon_greedy_search(
         loss_string = learner.loss_as_string()
         if not only_eval_summary:
             write_to_summary(writer, np.array(all_rewards), epsilon, loss_string, observation, iteration_count, steps_done)
+
+        if configuration.log_results:
+            for name, deception_tracker in observation['_deception_tracker'].items():
+                detection_points_results[name] = detection_points_results.get(name, [[], [0], []])
+                _, name_indptr, _ = detection_points_results[name]
+                # if len(deception_tracker.trigger_times):
+                detection_points_results[name][1] += [name_indptr[-1] + len(deception_tracker.trigger_times)]
+                detection_points_results[name][0] += deception_tracker.trigger_times
+                detection_points_results[name][2] += [episode_ended_at if episode_ended_at else iteration_count]
+
         if loss_string:
             loss_string = f"loss={loss_string}"
 
@@ -573,9 +605,16 @@ def epsilon_greedy_search(
             logger.info(f"New best running mean (eval): {mean_over_window}")
             best_running_mean = mean_over_window
 
+            if configuration.log_results:
+                np.savez(os.path.join(configuration.log_dir, 'training',
+                                      'detection_points_results.npz'),
+                         **({name + '_indices': np.array(v[0]) for name, v in detection_points_results.items()} |
+                            {name + '_indptr': np.array(v[1]) for name, v in detection_points_results.items()} |
+                            {name + '_eplength': np.array(v[2]) for name, v in detection_points_results.items()}))
+
             if save_model_filename:
-                learner.save(save_model_filename.replace('.tar', f'_stepsdone_{steps_done}.tar'))
-                learner.save(save_model_filename)
+                learner.save(save_model_filename.replace('.tar', f'_steps{steps_done}.tar'))
+                learner.save(save_model_filename.replace('.tar', '_best.tar'))
 
         length = episode_ended_at if episode_ended_at else iteration_count
         learner.end_of_episode(i_episode=i_episode, t=length)
@@ -589,6 +628,7 @@ def epsilon_greedy_search(
 
     wrapped_env.close()
     logger.info("simulation ended\n") if configuration.log_results else None
+
     if plot_episodes_length:
         plottraining.plot_end()
 

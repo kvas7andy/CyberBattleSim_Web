@@ -61,7 +61,6 @@ iteration_count = None
 eval_episode_count = int(os.getenv('EVAL_EPISODE_COUNT', 0))
 training_episode_count = None
 train_while_exploit = False
-exploit_train = "exploit_train"   # "exploit_manual"
 
 log_dir = 'logs/exper/' + "notebook_debug_tinymicro"
 # convert the datetime object to string of specific format
@@ -84,6 +83,7 @@ log_dir = os.path.join(log_dir, gymid, checkpoint_name) if checkpoint_name == 'm
     os.path.join(log_dir, gymid, checkpoint_date, checkpoint_name)
 os.environ['LOG_DIR'] = log_dir
 os.environ['LOG_RESULTS'] = str(log_results).lower()
+exploit_train = "exploittrain" * train_while_exploit + "exploitinfer" * (1 - train_while_exploit)
 
 
 os.makedirs(log_dir, exist_ok=True) if log_results else ''
@@ -178,7 +178,7 @@ if checkpoint_name != 'manual':
         DQL_agent.load_best(os.path.join(checkpoint_dir, 'training'))
     elif checkpoint_name.isnumeric():
         DQL_agent.load(os.path.join(checkpoint_dir, 'training',
-                                    f'exploit_train__trainepisodes{training_episode_count}_best_modelevaluation_stepsdone_{checkpoint_name}.tar'))
+                                    f'te{training_episode_count}_eval_steps{checkpoint_name}.tar'))
     DQL_agent.train_while_exploit = False
     DQL_agent.policy_net.eval()
 

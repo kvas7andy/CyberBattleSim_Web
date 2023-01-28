@@ -14,14 +14,14 @@ global_vulnerability_library: OrderedDict[VulnerabilityID, VulnerabilityInfo] = 
         description="Deceptive honeytoken with detection point",
         precondition=m.Precondition("~username.NoAuth&state&~script_block"),
         type=VulnerabilityType.REMOTE,
-        outcome=m.concatenate_outcomes((m.ProbeFailed, m.DetectionPoint))(detection_point_name="state_1"),
+        outcome=m.concatenate_outcomes((m.ProbeFailed, m.DetectionPoint))(detection_point_name="state"),
         reward_string="Honeytoken tamepring: changing state value in cookies leads to no change",
     )),
     ("V2toV1", VulnerabilityInfo(
         description="Version change triggers deceptive token",
         precondition=m.Precondition("~script_block"),
         type=VulnerabilityType.REMOTE,
-        outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="v2tov1_1"),  # Meeting 27.01, logic should be a bit different, should it lead to a different
+        outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="v2tov1"),  # Meeting 27.01, logic should be a bit different, should it lead to a different
         reward_string="Forced browsing attempt: changing version of platform value leads to no change",
     )),
 ])
@@ -78,10 +78,12 @@ nodes = {
             ("BrowsingTarget", VulnerabilityInfo(
                 description="Finding through HTTP requests special properties",
                 type=VulnerabilityType.REMOTE,
-                precondition=[m.Precondition("true"), m.Precondition("property.git"), m.Precondition("robots.txt"),
-                              m.Precondition("thisdoesnotexist"), m.Precondition("property.cloudactivedefense")],
-                outcome=[m.ExploitFailed()] * 4 + \
-                        [m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="cloudactivedefense_1")],
+                precondition=[m.Precondition("true"), m.Precondition("thisdoesnotexist"),
+                              m.Precondition("property.git"), m.Precondition("robots.txt"), m.Precondition("property.cloudactivedefense")],
+                outcome=[m.ExploitFailed()] * 2 + \
+                        [m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="git")] + \
+                        [m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="robots")] + \
+                        [m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="cloudactivedefense")],
                 reward_string=["Forced browsing attempts"] * 4 + \
                               ["Forced browsing attempts (honey HTTP header paremeter - detection point triggered)"],
                 cost=1.0
@@ -125,7 +127,7 @@ nodes = {
                 description="SQL injeciton on login field",
                 precondition=m.Precondition("username.NoAuth&username_password_restrictions"),
                 type=VulnerabilityType.REMOTE,
-                outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="sqlinjectusername_1"),
+                outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="sqlinjectusername"),
                 reward_string="SQL injeciton attack on login field: Invalid Credentials",
                 # rates=m.Rates(succesRate=0.9),  # TONEXTDO
             )),
@@ -133,7 +135,7 @@ nodes = {
             #     description="SQL injeciton on login field",
             #     precondition=m.Precondition("server&username.NoAuth"),
             #     type=VulnerabilityType.REMOTE,
-            #     outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="SqlServer_1"),
+            #     outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="SqlServer"),
             #     reward_string="SQL injeciton attack on login field",
             #     rates=m.Rates(succesRate=0.9),
             #     cost=1.0
@@ -174,7 +176,7 @@ nodes = {
                 precondition=m.Precondition("~username.NoAuth"),
                 type=VulnerabilityType.REMOTE,
                 outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(
-                    detection_point_name="calendar_1"),
+                    detection_point_name="calendar"),
                 reward_string="No access to the endpoint (GET_/v2/calendar/outofbound_number)",
                 cost=1.0
             )),
@@ -281,7 +283,7 @@ nodes = {
             ("", VulnerabilityInfo(
                 description="DECEPTION trap: honeypot - endpoint phonebook",
                 type=VulnerabilityType.REMOTE,
-                outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="phonebook_1"),
+                outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="phonebook"),
                 reward_string="Cannot GET_/v2/phonebook",
                 cost=1.0
             ))
@@ -307,7 +309,7 @@ nodes = {
     #             description="/render/http%3A%2F%2F127.0.0.1%3A8081%2Fdocuments%2Fa5db38da-156a-4d00-a041-9702db349ca5",
     #             type=VulnerabilityType.REMOTE,
     #             precondition=m.Precondition("~username.NoAuth&document_a5db38da"),
-    #             outcome=m.CustomerData(5),
+    #             outcome=m.CustomerData(),
     #             reward_string="GET_ting image (not sensitive info)",
     #             cost=1.0
     #         )),
