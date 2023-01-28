@@ -49,6 +49,7 @@ sftp*-config.json
 # data
 *.zip
 *.tar
+*.npz
 **/*.csv
 **/*.png
 **/*.tfevents.*

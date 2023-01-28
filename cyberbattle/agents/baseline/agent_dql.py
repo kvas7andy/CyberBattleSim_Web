@@ -532,13 +532,18 @@ class DeepQLearnerPolicy(Learner):
 
     def load_best(self, logdir_training: str, evaluation_ckpt=True, optimizer_load=True) -> None:
         filenames = [filename for filename in os.listdir(logdir_training)
-                     if '.tar' in filename and ('modelevaluation' * evaluation_ckpt in filename
-                                                or 'modelevaluation' * (not evaluation_ckpt) not in filename)]
-        best_ind_list = [i for i, filename in enumerate(filenames) if 'stepsdone' not in filename]
+                     if '.tar' in filename and ('eval' * evaluation_ckpt in filename
+                                                or 'eval' * (not evaluation_ckpt) not in filename)]
+        best_ind_list = [i for i, filename in enumerate(filenames) if 'steps' not in filename]
         if best_ind_list:
             filename_best_ckpt = filenames[best_ind_list[0]]
         else:
-            last_best_index = np.argmax([int(filename.split('_')[-1].split('.')[0]) for filename in filenames])  # getting the stepsdone value from the learned best model
+            # getting the stepsdone value from the learned best model
+            best_ind_list = [int(filename.split('steps')[-1].split('.')[0]) for filename in filenames if 'best' not in filename]
+            if not len(best_ind_list):
+                logger.warning("Error of loading any 'BEST' model, as none has 'best' or 'steps' in its list!")
+                raise ValueError(f"No file for the best checkpoint, check folder {logdir_training}")
+            last_best_index = np.argmax(best_ind_list)
             filename_best_ckpt = filenames[last_best_index]
 
         self.load(os.path.join(logdir_training, filename_best_ckpt), optimizer_load=optimizer_load)

@@ -26,7 +26,7 @@ the DQL agent and then run it one step at a time.
 
 # %%
 import os
-from dotenv import load_dotenv
+from dotenv import load_dotenv, dotenv_values
 import pandas as pd
 import datetime
 import cyberbattle.agents.baseline.learner as learner
@@ -36,6 +36,8 @@ import logging
 from cyberbattle.agents.baseline.agent_wrapper import ActionTrackingStateAugmentation, AgentWrapper, Verbosity
 from IPython.display import display
 import gym
+import yaml
+import json
 from cyberbattle.simulation.config import configuration, logger
 
 load_dotenv()
@@ -49,7 +51,6 @@ log_level = os.getenv('LOG_LEVEL', "info")
 iteration_count = None
 training_episode_count = None
 train_while_exploit = os.getenv("TRAIN_WHILE_EXPLOIT", 'True').lower() in ('true', '1', 't')
-exploit_train = "exploit_train"   # "exploit_manual"
 eval_episode_count = int(os.getenv('EVAL_EPISODE_COUNT', 0))
 eval_freq = int(os.getenv('EVAL_FREQ', 0))
 epsilon_exponential_decay = int(os.getenv('EPS_EXP_DECAY', max_episode_steps * 4000))  # 5000
@@ -59,15 +60,14 @@ log_dir = 'logs/exper/' + "notebook_dql_debug_with_tinymicro"
 # convert the datetime object to string of specific format
 datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 log_dir = os.path.join(log_dir, gymid, datetime_str)
-checkpoint_date = None
 
 # %%
 iteration_count = max_episode_steps if iteration_count is None else iteration_count
 os.environ['TRAINING_EPISODE_COUNT'] = os.getenv('TRAINING_EPISODE_COUNT', 1000) if training_episode_count is None else training_episode_count
 training_episode_count = int(os.environ['TRAINING_EPISODE_COUNT'])
-checkpoint_date = checkpoint_date if checkpoint_date else os.getenv('CHECKPOINT_DATE', '20230124_085534')
 os.environ['LOG_DIR'] = log_dir
 os.environ['LOG_RESULTS'] = str(log_results).lower()
+exploit_train = "exploittrain" * train_while_exploit + "exploitinfer" * (1 - train_while_exploit)
 
 os.makedirs(log_dir, exist_ok=True) if log_results else ''
 
@@ -99,6 +99,13 @@ ctf_env.spec.max_episode_steps = max_episode_steps
 # Evaluate the Deep Q-learning agent
 
 os.makedirs(os.path.join(log_dir, 'training'), exist_ok=True) if log_results else ''
+env_config = json.loads(json.dumps(dotenv_values()))
+with open(os.path.join(log_dir, 'training', '.env.data.yml'), 'w') as outfile:
+    yaml.dump(env_config, outfile, default_flow_style=False)
+with open(os.path.join(log_dir, 'training', '.env.data'), 'w') as outfile:
+    outfile.write("\n".join(k + "=" + str(v) for k, v in env_config.items()))
+logger.info(f"Loading env variables!\n{str(env_config)}")
+
 
 learning_rate = 0.01  # 0.01
 gamma = 0.015  # 0.015
@@ -128,7 +135,7 @@ dqn_learning_run = learner.epsilon_greedy_search(
     plot_episodes_length=False,
     title="DQL",
     save_model_filename=log_results * os.path.join(log_dir, 'training',
-                                                   f"{exploit_train}_{train_while_exploit * 'ExploitUdpates'}_te{training_episode_count}_best.tar")
+                                                   f"{exploit_train}_te{training_episode_count}.tar")
 )
 
 if log_results:
@@ -143,7 +150,7 @@ logger.setLevel(logging.INFO) if log_results else ''
 
 if log_results:
     logger.info("Saving model to directory " + log_dir)
-    DQL_agent.save(os.path.join(log_dir, f"{exploit_train}_{train_while_exploit*'ExploitUdpates'}_te{training_episode_count}_final.tar"))
+    DQL_agent.save(os.path.join(log_dir, f"{exploit_train}_te{training_episode_count}_final.tar"))
 
 
 logger.info("")
@@ -188,7 +195,7 @@ for n_trial in range(10):
         df = pd.DataFrame(h, columns=["Step", "Reward", "Cumulative Reward", "Next action", "Processed by", "Precondition", "Profile", "Reward string"])
         df.set_index("Step", inplace=True)
         if log_results:
-            df.to_csv(os.path.join(log_dir, f'{exploit_train}_{train_while_exploit*"ExploitUdpates"}_evaln{n_trial}_te{training_episode_count}_actions.csv'))
+            df.to_csv(os.path.join(log_dir, f'{exploit_train}_evaln{n_trial}_te{training_episode_count}_actions.csv'))
 
     print(f'len: {len(h)}, total reward: {total_reward}')
     pd.set_option("max_colwidth", 10**3)
@@ -197,4 +204,4 @@ for n_trial in range(10):
 
     # %% if not log_results else 'human'w
     wrapped_env.render(mode='rgb_array', filename=None if not log_results else
-                       os.path.join(log_dir, f'{exploit_train}_{train_while_exploit*"ExploitUdpates"}_evaln{n_trial}_te{training_episode_count}_network.png'))
+                       os.path.join(log_dir, f'{exploit_train}_evaln{n_trial}_te{training_episode_count}_network.png'))
