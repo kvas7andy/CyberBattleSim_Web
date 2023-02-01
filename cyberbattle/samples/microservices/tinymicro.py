@@ -10,7 +10,6 @@ from typing import Iterator, cast, Tuple, List
 from collections import OrderedDict
 
 global_vulnerability_library: OrderedDict[VulnerabilityID, VulnerabilityInfo] = OrderedDict([])
-# intial_profiles: List[Profile] = [] #TODO include username.NoAuth here, but not in the __init__ of CyberBattleEnv
 global_properties: List[PropertyName] = ["state", "document_a5db38da", "username_password_restrictions"]  # "server",  # Meeting 27.01, shared properties (document, username_password) + global properties (server state)
 initial_properties: List[PropertyName] = ["property.git", "robots.txt", "thisdoesnotexist"]
 
@@ -73,7 +72,7 @@ nodes = {
 
     "GET_/v2/login": m.NodeInfo(  # Kindha discovers only POST /v2/login and POSSIBLE rules for /v2/users
         services=[],
-        value=0,
+        value=10,
         vulnerabilities=OrderedDict([
             ("ScanLoginPage", VulnerabilityInfo(
                 description="Login button endpoint leading to form, scan source file and find correct username/password restrictions",
@@ -126,7 +125,7 @@ nodes = {
         services=[],
         value=0,
         vulnerabilities=OrderedDict([
-            ("", VulnerabilityInfo(
+            ("", VulnerabilityInfo(  # LocalUser == registered user with SESSION token, but without privilages!
                 description="Register patient and check cokies from authorisation",
                 precondition=m.Precondition("username.NoAuth"),
                 type=VulnerabilityType.REMOTE,
@@ -192,7 +191,7 @@ nodes = {
 
     "GET_/v2/users": m.NodeInfo(
         services=[],
-        value=100,
+        value=0,
         properties=["username_password_restrictions"],  # SO WE NEED INCLUDE all usernames into properties
         vulnerabilities=OrderedDict([
             ("", VulnerabilityInfo(
@@ -244,6 +243,7 @@ nodes = {
             )),
 
         ])),
+
 }
 
 # Environment constants

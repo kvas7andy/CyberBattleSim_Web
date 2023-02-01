@@ -46,7 +46,7 @@ class StreamToLogger(object):
 
 class Configuration():
     def __init__(self):
-        self.LOGGER_NAME = "papermill"
+        self.LOGGER_NAME = "General"
         self.logger = logging.getLogger(self.LOGGER_NAME)
         log_dir = '/logs/exper/' + "dummy_log_folder"
         # convert the datetime object to string of specific format
