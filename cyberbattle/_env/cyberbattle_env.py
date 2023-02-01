@@ -260,7 +260,7 @@ class EnvironmentBounds(NamedTuple):
             else:
                 vulnerabilities_dict[vuln.split(':')[0]] += [vuln.split(':')[-1]]
 
-        maximum_vulnerability_variables = max(len(set(variables)) for variables in vulnerabilities_dict.values())
+        maximum_vulnerability_variables = max(max(len(set(variables)) for variables in vulnerabilities_dict.values()), maximum_vulnerability_variables)
         return EnvironmentBounds(
             maximum_total_credentials=maximum_total_credentials,
             maximum_node_count=max(maximum_node_count, len(vulnerabilities_dict)),
@@ -487,7 +487,7 @@ class CyberBattleEnv(gym.Env):
                 maximum_node_count=maximum_node_count,
                 maximum_discoverable_credentials_per_action=maximum_discoverable_credentials_per_action,
                 minimum_profiles_count=minimum_profiles_count,
-                maximum_vulnerability_variables=max([maximum_vulnerability_variables] +
+                maximum_vulnerability_variables=max([maximum_vulnerability_variables] +  # maximum_vulnerability_variables,
                                                     [len(node_info.vulnerabilities) for _, node_info in initial_environment.nodes()]),
                 identifiers=initial_environment.identifiers)
 
@@ -647,10 +647,12 @@ class CyberBattleEnv(gym.Env):
 
     def __indexvariableid_nodeid_to_remote_vulnerabilityid(self, node: model.NodeID, vulnerability_index: int) -> model.VulnerabilityID:
         """Return the remote vulnerability identifier from its internal encoding index"""
-        try:
-            return list(self.__indexvariableid_nodeid_to_vulnerabilities(node, model.VulnerabilityType.REMOTE).items())[vulnerability_index][0].split(":")[-1]
-        except (OutOfBoundIndexError, IndexError, KeyError):
-            return vulnerability_index
+        target_node_vulns = self.__indexvariableid_nodeid_to_vulnerabilities(node, model.VulnerabilityType.REMOTE)
+        if vulnerability_index < len(target_node_vulns):
+            return list(target_node_vulns.keys())[vulnerability_index].split(":")[-1]
+        else:
+            # count from the end [..., max(from_nodes), global_vul1 global_vuln2, ...]
+            return list(self.__environment.vulnerability_library.keys())[-1 + vulnerability_index - (self.bounds.maximum_vulnerability_variables - 1)]
 
     def __nodeid_remote_vulnerabilityid_to_vulnerability_index(self, node: model.NodeID, vulnerabilty_id: model.VulnerabilityID, vtype: model.VulnerabilityType) -> int:
         """Return the remote vulnerability identifier from its internal encoding index"""
@@ -766,18 +768,28 @@ class CyberBattleEnv(gym.Env):
                         bitmask["local_vulnerability"][source_index, vulnerability_index] = 1
 
                 for target_node_id in self.__discovered_nodes:
+                    if source_node_id == target_node_id:
+                        continue
                     target_index = self.__find_external_index(target_node_id)
                     vulnerabilities = self.__indexvariableid_nodeid_to_vulnerabilities(target_node_id, vtype=model.VulnerabilityType.REMOTE)
                     bitmask["remote_vulnerability"][source_index,
                                                     target_index,
                                                     :len(self.__discovered_profiles),
                                                     :len(vulnerabilities)] = 1
+                    bitmask["remote_vulnerability"][source_index,
+                                                    target_index,
+                                                    :len(self.__discovered_profiles),
+                                                    -len(self.__initial_environment.vulnerability_library):] = 1
                     if self.__ip_local:
                         max_profiles_count = bitmask["remote_vulnerability"].shape[2]
                         bitmask["remote_vulnerability"][source_index,
                                                         target_index,
                                                         max_profiles_count // 2: max_profiles_count // 2 + len(self.__discovered_profiles),
                                                         :len(vulnerabilities)] = 1
+                        bitmask["remote_vulnerability"][source_index,
+                                                        target_index,
+                                                        max_profiles_count // 2: max_profiles_count // 2 + len(self.__discovered_profiles),
+                                                        -len(self.__initial_environment.vulnerability_library):] = 1
 
                     bitmask["connect"][source_index,
                                        target_index,

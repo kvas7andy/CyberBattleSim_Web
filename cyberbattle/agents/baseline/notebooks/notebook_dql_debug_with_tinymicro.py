@@ -49,6 +49,7 @@ log_results = os.getenv("LOG_RESULTS", 'False').lower() in ('true', '1', 't')
 gymid = os.getenv("GYMID", 'CyberBattleTinyMicro-v0')
 log_level = os.getenv('LOG_LEVEL', "info")
 iteration_count = None
+honeytokens_on = None
 training_episode_count = None
 train_while_exploit = os.getenv("TRAIN_WHILE_EXPLOIT", 'True').lower() in ('true', '1', 't')
 eval_episode_count = int(os.getenv('EVAL_EPISODE_COUNT', 0))
@@ -56,16 +57,17 @@ eval_freq = int(os.getenv('EVAL_FREQ', 0))
 epsilon_exponential_decay = int(os.getenv('EPS_EXP_DECAY', max_episode_steps * 4000))  # 5000
 mean_reward_window = int(os.getenv('MEAN_REWARD_WINDOW', 10))
 
-log_dir = 'logs/exper/' + "notebook_dql_debug_with_tinymicro"
+# %%
+iteration_count = max_episode_steps if iteration_count is None else iteration_count
+os.environ['TRAINING_EPISODE_COUNT'] = os.getenv('TRAINING_EPISODE_COUNT', 1000) if training_episode_count is None else str(training_episode_count)
+training_episode_count = int(os.environ['TRAINING_EPISODE_COUNT'])
+
+log_dir = '/logs/exper/' + "notebook_dql_debug_with_tinymicro"
 # convert the datetime object to string of specific format
 datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 log_dir = os.path.join(log_dir, gymid, datetime_str)
-
-# %%
-iteration_count = max_episode_steps if iteration_count is None else iteration_count
-os.environ['TRAINING_EPISODE_COUNT'] = os.getenv('TRAINING_EPISODE_COUNT', 1000) if training_episode_count is None else training_episode_count
-training_episode_count = int(os.environ['TRAINING_EPISODE_COUNT'])
 os.environ['LOG_DIR'] = log_dir
+
 os.environ['LOG_RESULTS'] = str(log_results).lower()
 exploit_train = "exploittrain" * train_while_exploit + "exploitinfer" * (1 - train_while_exploit)
 
@@ -100,11 +102,12 @@ ctf_env.spec.max_episode_steps = max_episode_steps
 
 os.makedirs(os.path.join(log_dir, 'training'), exist_ok=True) if log_results else ''
 env_config = json.loads(json.dumps(dotenv_values()))
-with open(os.path.join(log_dir, 'training', '.env.data.yml'), 'w') as outfile:
-    yaml.dump(env_config, outfile, default_flow_style=False)
-with open(os.path.join(log_dir, 'training', '.env.data'), 'w') as outfile:
-    outfile.write("\n".join(k + "=" + str(v) for k, v in env_config.items()))
-logger.info(f"Loading env variables!\n{str(env_config)}")
+if configuration.log_results:
+    with open(os.path.join(log_dir, 'training', '.env.data.yml'), 'w') as outfile:
+        yaml.dump(env_config, outfile, default_flow_style=False)
+    with open(os.path.join(log_dir, 'training', '.env.data'), 'w') as outfile:
+        outfile.write("\n".join(k + "=" + str(v) for k, v in env_config.items()))
+    logger.info(f"Loading env variables!\n{str(env_config)}")
 
 
 learning_rate = 0.01  # 0.01

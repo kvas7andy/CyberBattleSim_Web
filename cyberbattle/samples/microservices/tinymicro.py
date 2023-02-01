@@ -18,7 +18,7 @@ initial_properties: List[PropertyName] = ["property.git", "robots.txt", "thisdoe
 nodes = {
     "client_browser": m.NodeInfo(
         services=[],
-        value=0,  # owning reward
+        value=0,
         properties=["script_block"],
         owned_string="Attacker owns his laptop",
         vulnerabilities=OrderedDict([
@@ -57,7 +57,7 @@ nodes = {
     "GET_/v2": m.NodeInfo(
         services=[],
         properties=["property.git", "robots.txt", "thisdoesnotexist"],
-        value=10,  # owning reward
+        value=0,
         vulnerabilities=OrderedDict([
             ("BrowsingTarget", VulnerabilityInfo(
                 description="Finding through HTTP requests special properties",
@@ -73,7 +73,7 @@ nodes = {
 
     "GET_/v2/login": m.NodeInfo(  # Kindha discovers only POST /v2/login and POSSIBLE rules for /v2/users
         services=[],
-        value=10,
+        value=0,
         vulnerabilities=OrderedDict([
             ("ScanLoginPage", VulnerabilityInfo(
                 description="Login button endpoint leading to form, scan source file and find correct username/password restrictions",
@@ -91,7 +91,7 @@ nodes = {
 
     "POST_/v2/login": m.NodeInfo(
         services=[],
-        value=10,
+        value=0,
         properties=["username"],  # !!! "server",
         # TONEXTDO switch action of profiles? or If we include password protection, here could be a lot of vulenerabilities because of "weak" security
         vulnerabilities=OrderedDict([
@@ -124,9 +124,9 @@ nodes = {
 
     "POST_/v2/register": m.NodeInfo(
         services=[],
-        value=10,  # owning reward
+        value=0,
         vulnerabilities=OrderedDict([
-            ("", VulnerabilityInfo(  # LocalUser == registered user with SESSION token, but without privilages!
+            ("", VulnerabilityInfo(
                 description="Register patient and check cokies from authorisation",
                 precondition=m.Precondition("username.NoAuth"),
                 type=VulnerabilityType.REMOTE,
@@ -162,7 +162,7 @@ nodes = {
 
     "GET_/v2/messages": m.NodeInfo(
         services=[],
-        value=40,
+        value=0,
         vulnerabilities=OrderedDict([
             # Recoinnassance
             ("", VulnerabilityInfo(
@@ -192,7 +192,7 @@ nodes = {
 
     "GET_/v2/users": m.NodeInfo(
         services=[],
-        value=100,  # owning reward
+        value=100,
         properties=["username_password_restrictions"],  # SO WE NEED INCLUDE all usernames into properties
         vulnerabilities=OrderedDict([
             ("", VulnerabilityInfo(
@@ -242,63 +242,8 @@ nodes = {
                 reward_string="Gaining 2 HTML entries, second as CTF flag as the base-64 encoded image",
                 cost=1.0
             )),
-            # ("id", VulnerabilityInfo(
-            #     description="Medical image of patient of Dr. MarioDFiles",
-            #     type=VulnerabilityType.REMOTE,
-            #     precondition=m.Precondition("~username.NoAuth&ip.local&document_a5db38dar"),
-            #     outcome=m.CustomerData(10),
-            #     reward_string="Obtained low value medical image of doctor's MarioDFiles patient",
-            #     cost=1.0
-            # )),
-        ])),
 
-    # "GET_/v2/render": m.NodeInfo(
-    #     services=[],
-    #     value=0,
-    #     properties=["ip_local"],
-    #     vulnerabilities=OrderedDict(
-    #         # Identify GET_usage for anyuser
-    #         (("", VulnerabilityInfo(
-    #             description="Trying to GET_/v2/render",
-    #             type=VulnerabilityType.REMOTE,
-    #             precondition=m.Precondition("~username.NoAuth"),
-    #             outcome=m.ExploitFailed(), # TODO code same outcome as from node "GET_/v2"
-    #             reward_string="Cannot GET_/render",
-    #             cost=1.0
-    #         ))
-    #     )),
-    # ),
-    #         ("id",VulnerabilityInfo(
-    #             description="/render/http%3A%2F%2F127.0.0.1%3A8081%2Fdocuments%2Fa5db38da-156a-4d00-a041-9702db349ca5",
-    #             type=VulnerabilityType.REMOTE,
-    #             precondition=m.Precondition("~username.NoAuth&document_a5db38da"),
-    #             outcome=m.CustomerData(5),
-    #             reward_string="GET_ting image (not sensitive info)",
-    #             cost=1.0
-    #         )),
-    #         # TODOMeeting what is the point of being unauthenticated here?
-    #         ("test",VulnerabilityInfo(
-    #             description="Ping test",
-    #             type=VulnerabilityType.REMOTE,
-    #             outcome=m.ExploitFailed(),
-    #             reward_string="Server unreachable",
-    #             cost=1.0
-    #         )),
-    #         ("outer_address", VulnerabilityInfo(
-    #             description="Ping www.google.com",
-    #             type=VulnerabilityType.REMOTE,
-    #             outcome=m.ExploitFailed(),
-    #             reward_string="Server unreachable",
-    #             cost=1.0
-    #         )),
-    #         ("local_address",VulnerabilityInfo(
-    #             description="Ping 127.0.0.1",
-    #             type=VulnerabilityType.REMOTE,
-    #             outcome=m.ProbeSucceeded(["ip_local"]),  # TOTMeeting or here we give profile of IP.local
-    #             reward_string="GET_/ in header",
-    #             cost=1.0
-    #         ))
-    #     )),
+        ])),
 }
 
 # Environment constants

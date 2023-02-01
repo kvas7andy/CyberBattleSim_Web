@@ -3,12 +3,12 @@
 
 # %%
 import torch as th
-import gym
 from typing import cast
-import cyberbattle
 from cyberbattle._env.cyberbattle_env import CyberBattleEnv
 from cyberbattle._env.cyberbattle_toyctf import CyberBattleToyCtf
 from cyberbattle._env.cyberbattle_tiny import CyberBattleTiny
+from cyberbattle._env.cyberbattle_tinymicro import CyberBattleTinyMicroFull
+
 import logging
 import sys
 from stable_baselines3.a2c.a2c import A2C
@@ -20,7 +20,9 @@ from stable_baselines3.common.logger import TensorBoardOutputFormat
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecEnv
 from cyberbattle._env.flatten_wrapper import FlattenObservationWrapper, FlattenActionWrapper
 import os
-th.cuda.set_device('cuda:3')
+# th.cuda.set_device('cuda:3')
+device = th.device("cuda" if th.cuda.is_available() else "cpu")
+# th.cuda.set_device(device)
 retrain = ['a2c']
 
 
@@ -55,7 +57,7 @@ class SummaryWriterCallback(BaseCallback):
 logging.basicConfig(stream=sys.stdout, level=logging.ERROR, format="%(levelname)s: %(message)s")
 
 # %%
-env = CyberBattleTiny(
+env = CyberBattleTinyMicroFull(
     maximum_node_count=12,
     maximum_total_credentials=10,
     observation_padding=True,
@@ -84,7 +86,7 @@ ignore_fields = [
 ]
 env2 = FlattenObservationWrapper(cast(CyberBattleEnv, env1), ignore_fields=ignore_fields)
 
-log_dir = os.path.join('logs/exper/stablebaselines', str(env))
+log_dir = os.path.join('/logs/exper/stablebaselines', str(env))
 
 
 def return_env(env) -> CyberBattleEnv:
@@ -99,7 +101,7 @@ if __name__ == "__main__":
 # %%
     if 'a2c' in retrain:
         model_a2c = A2C("MultiInputPolicy", env_last, tensorboard_log=log_dir, verbose=1).learn(
-            1e4, progress_bar=True, callback=SummaryWriterCallback())
+            1e4, callback=SummaryWriterCallback())  # logger=None
         model_a2c.save('a2c_trained_toyctf')
 
     # %%

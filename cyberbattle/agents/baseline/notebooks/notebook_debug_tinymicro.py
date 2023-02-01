@@ -62,7 +62,7 @@ eval_episode_count = int(os.getenv('EVAL_EPISODE_COUNT', 0))
 training_episode_count = None
 train_while_exploit = False
 
-log_dir = 'logs/exper/' + "notebook_debug_tinymicro"
+log_dir = '/logs/exper/' + "notebook_debug_tinymicro"
 # convert the datetime object to string of specific format
 log_level = os.getenv('LOG_LEVEL', "info")
 checkpoint_name = 'manual' if os.getenv('CHECKPOINT', 'manual').lower() in ('manual') else os.environ['CHECKPOINT'].lower()
@@ -71,12 +71,12 @@ checkpoint_date = None
 
 # %%
 iteration_count = max_episode_steps if iteration_count is None else iteration_count
-os.environ['TRAINING_EPISODE_COUNT'] = os.getenv('TRAINING_EPISODE_COUNT', 3000) if training_episode_count is None else training_episode_count
+os.environ['TRAINING_EPISODE_COUNT'] = os.getenv('TRAINING_EPISODE_COUNT', 3000) if training_episode_count is None else str(training_episode_count)
 training_episode_count = int(os.environ['TRAINING_EPISODE_COUNT'])
 
 checkpoint_date = checkpoint_date if checkpoint_date else os.getenv('CHECKPOINT_DATE', '20230124_085534')
 datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-checkpoint_dir = os.path.join("logs/exper/" + "notebook_dql_debug_with_tinymicro", gymid, checkpoint_date)
+checkpoint_dir = os.path.join("/logs/exper/" + "notebook_dql_debug_with_tinymicro", gymid, checkpoint_date)
 assert checkpoint_name in ('best', 'manual') or checkpoint_name.isnumeric(), f"Checkpoint name {checkpoint_name} is not manual, best or stepsdone number"
 
 log_dir = os.path.join(log_dir, gymid, checkpoint_name) if checkpoint_name == 'manual' else \
