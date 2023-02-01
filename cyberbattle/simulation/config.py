@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 import datetime
 from torch.utils.tensorboard import SummaryWriter
 
-
 load_dotenv()
 
 
@@ -47,9 +46,9 @@ class StreamToLogger(object):
 
 class Configuration():
     def __init__(self):
-        self.LOGGER_NAME = "General"
+        self.LOGGER_NAME = "papermill"
         self.logger = logging.getLogger(self.LOGGER_NAME)
-        log_dir = 'logs/exper/' + "dummy_log_folder"
+        log_dir = '/logs/exper/' + "dummy_log_folder"
         # convert the datetime object to string of specific format
         datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         self.log_results = os.getenv("LOG_RESULTS", 'False').lower() in ('true', '1', 't')
@@ -58,9 +57,13 @@ class Configuration():
         self.summary_dir = None
         self.log_level = os.getenv("LOG_LEVEL", "info")
         self.writer = None
+        self.honeytokens_on = {"HT_v2tov1": True, "HT_phonebook": True, "HT_state": True, "HT_cloudactivedefense": True}
+        if type(self.honeytokens_on) == str:
+            self.honeytokens_on = {{ht_include_tuple.split(':')[0].strip(): ht_include_tuple.split(':')[1].strip().lower() in ['true', 'True']}
+                                   for ht_include_tuple in os.getenv('HONEYTOKENS_ON')[1:-1].split(',')}
 
-    def update_globals(self, log_dir: str, gymid: str, log_level: str, log_results: bool):
-        self.log_dir, self.gymid, self.log_level, self.log_results = log_dir, gymid, log_level, log_results
+    def update_globals(self, log_dir: str, gymid: str, log_level: str, log_results: bool, honeytokens_on: dict = {}) -> None:
+        self.log_dir, self.gymid, self.log_level, self.log_results, self.honeytokens_on = log_dir, gymid, log_level, log_results, honeytokens_on
 
     def update_logger(self):
         # if len(logging.getLogger().handlers):

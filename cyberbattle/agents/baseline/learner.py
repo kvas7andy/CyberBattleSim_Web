@@ -108,21 +108,22 @@ def write_to_summary(writer, all_rewards, epsilon, loss_string, observation, ite
     is_training = writer_tag == "training"
 
     total_reward = sum(all_rewards)
-    writer.add_histogram(writer_tag + "/rewards", all_rewards, steps_done)
+    # TODO: make higher verbosity level
+    # writer.add_histogram(writer_tag + "/rewards", all_rewards, steps_done)
     writer.add_scalar(writer_tag + "/epsilon", epsilon, steps_done) if is_training else ''
     writer.add_scalar(writer_tag + "/loss", float(loss_string), steps_done) if is_training and loss_string else ''
 
     n_positive_actions = np.sum(np.array(all_rewards) > 0)
     writer.add_scalar(writer_tag + "/n_positive_actions", n_positive_actions, steps_done)
     writer.add_scalar(writer_tag + "/total_reward", total_reward, steps_done)
-    writer.add_text(writer_tag + "/deception_tracker", str({k: v.trigger_times for k, v in observation['_deception_tracker'].items()}), steps_done)
+    # writer.add_text(writer_tag + "/deception_tracker", str({k: v.trigger_times for k, v in observation['_deception_tracker'].items()}), steps_done)
     for k, v in observation['_deception_tracker'].items():
         writer.add_scalar(writer_tag + "/detection_points_trigger_counter/" + k, len(v.trigger_times), steps_done)
-        writer.add_histogram(writer_tag + "/detection_points_trigger_steps/" + k,
-                             np.array(v.trigger_times), steps_done, bins=iteration_count) if len(v.trigger_times) else ''
-    triggers = [v.trigger_times for _, v in observation['_deception_tracker'].items()]
-    writer.add_histogram(writer_tag + "/detection_points_trigger_steps",
-                         np.concatenate(triggers), steps_done, bins=iteration_count) if len(triggers) and len(np.concatenate(triggers)) else ''
+        # writer.add_histogram(writer_tag + "/detection_points_trigger_steps/" + k,
+        #                      np.array(v.trigger_times), steps_done, bins=iteration_count) if len(v.trigger_times) else ''
+    # triggers = [v.trigger_times for _, v in observation['_deception_tracker'].items()]
+    # writer.add_histogram(writer_tag + "/detection_points_trigger_steps",
+    #                      np.concatenate(triggers), steps_done, bins=iteration_count) if len(triggers) and len(np.concatenate(triggers)) else ''
     writer.flush()
 
 
