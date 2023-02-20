@@ -229,7 +229,7 @@ def evaluate_model(
             action_style, gym_action, action_metadata = learner.exploit(wrapped_env, observation)
             if not gym_action:
                 stats['exploit_deflected_to_explore'] += 1
-                _, gym_action, action_metadata = learner.explore(wrapped_env)
+                _, gym_action, action_metadata = learner.explore(wrapped_env)  # TODO: evaluation - exclude gym_aciton is None due to 1) NN no candidates 2)  > n_discovered_nodes, > n_credential_cache
 
             # Take the step
             # logger.debug(f"gym_action={gym_action}, action_metadata={action_metadata}") if configuration.log_results else None
@@ -362,8 +362,6 @@ def epsilon_greedy_search(
     plot_episodes_length=True,
     save_model_filename="",
     only_eval_summary=False
-
-
 ) -> TrainedLearner:
     """Epsilon greedy search for CyberBattle gym environments
 
@@ -478,11 +476,15 @@ def epsilon_greedy_search(
                 '|Iteration ',
                 progressbar.Counter(),
                 '|',
+                progressbar.Variable(name='steps_done', width=6, precision=6),
+                '|',
                 progressbar.Variable(name='reward', width=7, precision=5),
                 '|',
                 progressbar.Variable(name='last_reward_at', width=2),
                 '|',
                 progressbar.Variable(name='done_at', width=2),
+                '|',
+                progressbar.Variable(name='loss', width=4, precision=3),
                 '|',
                 progressbar.Variable(name='epsilon', width=5, precision=3),
                 '|',
@@ -490,16 +492,16 @@ def epsilon_greedy_search(
                 '|',
                 progressbar.Timer(),
                 '|',
-                progressbar.ETA(),
+                # progressbar.ETA(),
                 progressbar.Bar()
             ],
             redirect_stdout=False)
 
-        for t in bar(range(1, 1 + iteration_count)):
+        if epsilon_exponential_decay:  # the less epsilon_exponential_decay, the faster epsilon goes to epsilon_minimum
+            epsilon = epsilon_minimum + math.exp(-5. * steps_done /  # min is exp(-5) ~ 0.007 compare to exp(-1) ~ 0.37
+                                                 (epsilon_exponential_decay * iteration_count)) * (initial_epsilon - epsilon_minimum)
 
-            if epsilon_exponential_decay:
-                epsilon = epsilon_minimum + math.exp(-1. * steps_done /
-                                                     epsilon_exponential_decay) * (initial_epsilon - epsilon_minimum)
+        for t in bar(range(1, 1 + iteration_count)):
 
             steps_done += 1
 
@@ -558,6 +560,8 @@ def epsilon_greedy_search(
             if done:
                 episode_ended_at = t
                 bar.update(t, done_at=t)
+                bar.update(t, steps_done=steps_done)
+                bar.update(t, loss=getattr(learner, 'loss', None))
                 bar.finish(dirty=True)
                 break
 

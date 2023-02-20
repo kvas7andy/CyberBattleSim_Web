@@ -16,14 +16,14 @@ global_vulnerability_library: OrderedDict[VulnerabilityID, VulnerabilityInfo] = 
         description="Deceptive honeytoken with detection point",
         precondition=m.Precondition("~username.NoAuth&state"),  # ~script_block,
         type=VulnerabilityType.REMOTE,
-        outcome=m.concatenate_outcomes((m.ProbeFailed, m.DetectionPoint))(detection_point_name="HT_state"),
+        outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(cost=10, detection_point_name="HT3_state"),
         reward_string="Honeytoken tamepring: changing state value in cookies leads to no change",
     )),
     ("V2toV1", VulnerabilityInfo(
         description="Version change triggers deceptive token",
         # precondition=m.Precondition("~script_block"),
         type=VulnerabilityType.REMOTE,
-        outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="HT_v2tov1"),  # Meeting 27.01, logic should be a bit different, should it lead to a different
+        outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="HT1_v2tov1"),  # Meeting 27.01, logic should be a bit different, should it lead to a different
         reward_string="Forced browsing attempt: changing version of platform value leads to no change",
     )),
 ])
@@ -85,7 +85,7 @@ nodes = {
                 outcome=[m.ExploitFailed()] * 2 +
                         [m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="DP_git")] +
                         [m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="DP_robots")] +
-                        [m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="HT_cloudactivedefense")],
+                        [m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="HT4_cloudactivedefense")],
                 reward_string=["Forced browsing attempts"] * 4 +
                               ["Forced browsing attempts (honey HTTP header paremeter - detection point triggered)"],
                 cost=1.0
@@ -284,7 +284,7 @@ nodes = {
             ("", VulnerabilityInfo(
                 description="DECEPTION trap: honeypot - endpoint phonebook",
                 type=VulnerabilityType.REMOTE,
-                outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="HT_phonebook"),
+                outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="HT2_phonebook"),
                 reward_string="Cannot GET_/v2/phonebook",
                 cost=1.0
             ))

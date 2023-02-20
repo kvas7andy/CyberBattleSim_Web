@@ -10,7 +10,7 @@
 #       jupytext_version: 1.6.0
 # ---
 
-# %%
+# # %%
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
@@ -20,7 +20,7 @@ the DQL agent and then run it one step at a time.
 
 # pylint: disable=invalid-name
 
-# %%
+# # %%
 import sys
 import logging
 import gym
@@ -32,12 +32,12 @@ import cyberbattle.agents.baseline.agent_dql as dqla
 
 logging.basicConfig(stream=sys.stdout, level=logging.ERROR, format="%(levelname)s: %(message)s")
 
-# %% {"tags": ["parameters"]}
+# # %% {"tags": ["parameters"]}
 gymid = 'CyberBattleTiny-v0'
 iteration_count = 150
 training_episode_count = 10
 
-# %%
+# # %%
 # Load the gym environment
 
 ctf_env = gym.make(gymid)
@@ -48,7 +48,7 @@ ep = w.EnvironmentBounds.of_identifiers(
     identifiers=ctf_env.identifiers
 )
 
-# %%
+# # %%
 # Evaluate the Deep Q-learning agent
 dqn_learning_run = learner.epsilon_greedy_search(
     cyberbattle_gym_env=ctf_env,
@@ -72,14 +72,14 @@ dqn_learning_run = learner.epsilon_greedy_search(
     title="DQL"
 )
 
-# %%
+# # %%
 # initialize the environment
 
 current_o = ctf_env.reset()
 wrapped_env = AgentWrapper(ctf_env, ActionTrackingStateAugmentation(ep, current_o))
 l = dqn_learning_run['learner']
 
-# %%
+# # %%
 # Use the trained agent to run the steps one by one
 
 max_steps = 10
@@ -97,5 +97,5 @@ for i in range(max_steps):
 
 print(f'len: {len(h)}')
 
-# %%
+# # %%
 ctf_env.render()

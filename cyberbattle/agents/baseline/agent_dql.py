@@ -246,13 +246,15 @@ class DeepQLearnerPolicy(Learner):
                  target_update: int,
                  batch_size: int,
                  learning_rate: float,
-                 train_while_exploit: bool = True):
+                 train_while_exploit: bool = True,
+                 reward_clip: Optional[Tuple[float, float]] = None):
 
         self.stateaction_model = CyberBattleStateActionModel(ep)
         self.batch_size = batch_size
         self.gamma = gamma
         self.learning_rate = learning_rate
         self.train_while_exploit = train_while_exploit
+        self.reward_clip = reward_clip
 
         self.policy_net = DQN(ep).to(device)
         self.target_net = DQN(ep).to(device)
@@ -294,6 +296,8 @@ class DeepQLearnerPolicy(Learner):
         state_batch = torch.cat(batch.state)
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
+        if self.reward_clip:
+            reward_batch = 2 * (reward_batch - reward_batch.min()) / (reward_batch.max() - reward_batch.min()) - 1
 
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
@@ -341,6 +345,8 @@ class DeepQLearnerPolicy(Learner):
                           abstract_action: np.int32,
                           next_actor_state: Optional[ndarray]):
         # store the transition in memory
+        # if self.reward_clip:
+        #     reward = 2 * (reward - self.reward_clip[0]) / float(self.reward_clip[1] - self.reward_clip[0]) - 1
         reward_tensor = torch.tensor([reward], device=device, dtype=torch.float)
         action_tensor = torch.tensor([[np.int_(abstract_action)]], device=device, dtype=torch.long)
         current_state_tensor = torch.as_tensor(actor_state, dtype=torch.float, device=device).unsqueeze(0)
@@ -409,6 +415,7 @@ class DeepQLearnerPolicy(Learner):
                 ) -> Tuple[str, cyberbattle_env.Action, object]:
         """Random exploration that avoids repeating actions previously taken in the same state"""
         # sample local and remote actions only (excludes connect action)
+        logger.info("Enter exploration phase instead of exploitation.")
         gym_action = wrapped_env.env.sample_valid_action(kinds=[0, 1, 2])
         metadata = self.metadata_from_gymaction(wrapped_env, gym_action)
         return "explore", gym_action, metadata

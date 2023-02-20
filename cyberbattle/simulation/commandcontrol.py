@@ -47,11 +47,11 @@ class CommandControl:
             self.__gathered_credentials.update(outcome.credentials)
         return
 
-    def __accumulate_reward(self, reward: actions.Reward) -> None:
+    def __accumulate_reward(self, reward: actions.RewardType) -> None:
         """Accumulate new reward"""
         self.__total_reward += reward
 
-    def total_reward(self) -> actions.Reward:
+    def total_reward(self) -> actions.RewardType:
         """Return the current accumulated reward"""
         return self.__total_reward
 

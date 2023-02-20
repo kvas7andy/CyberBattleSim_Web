@@ -57,7 +57,7 @@ class Configuration():
         self.summary_dir = None
         self.log_level = os.getenv("LOG_LEVEL", "info")
         self.writer = None
-        self.honeytokens_on = {"HT_v2tov1": True, "HT_phonebook": True, "HT_state": True, "HT_cloudactivedefense": True}
+        self.honeytokens_on = {"HT1_v2tov1": True, "HT2_phonebook": True, "HT3_state": True, "HT4_cloudactivedefense": True}
         if type(self.honeytokens_on) == str:
             self.honeytokens_on = {{ht_include_tuple.split(':')[0].strip(): ht_include_tuple.split(':')[1].strip().lower() in ['true', 'True']}
                                    for ht_include_tuple in os.getenv('HONEYTOKENS_ON')[1:-1].split(',')}
@@ -78,7 +78,7 @@ class Configuration():
         # filemode='a')
         # handlers = [logging.StreamHandler(sys.stderr), logging.StreamHandler(sys.stdout)])
 
-        # if logging.getLogger("General").hasHandlers():
+        # if logging.getLogger("General").hasHandlers()recon
         #     return logging.getLogger("General")
         # self.logger = logging.getLogger(LOGGER_NAME)
 
@@ -100,10 +100,11 @@ class Configuration():
             handler_memory = handler  # logging.handlers.MemoryHandler(10**2, target=handler)
             self.logger.addHandler(handler_memory)
         else:
-            self.logger.setLevel(logging.CRITICAL)
-            self.logger.propagate = False  # do not pass log_messages to the higher hierarchy logger, i.e. do not right to stdout
-        # else:
-        #     sys.stdout = LoggerWriter(None, None)
+            pass
+            # self.logger.setLevel(logging.CRITICAL)
+            # self.logger.propagate = True  # do not pass log_messages to the higher hierarchy logger, i.e. do not right to stdout
+            # else:
+            #     sys.stdout = LoggerWriter(None, None)
             # lhStdout = logger.handlers[0]  # stdout is the only handler initially
             # logger.removeHandler(lhStdout)
         if self.log_results:
@@ -132,5 +133,4 @@ class WriterWrapper(SummaryWriter):
 
 
 configuration = Configuration()
-logger = configuration.logger
-writer = configuration.writer
+logger, writer = configuration.logger, configuration.writer  # None, None
