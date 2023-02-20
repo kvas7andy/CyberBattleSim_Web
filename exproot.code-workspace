@@ -32,7 +32,7 @@
 		"files.autoSave": "off",
 		"debug.allowBreakpointsEverywhere": true,
 		"python.languageServer": "Pylance",
-		"python.analysis.typeCheckingMode": "basic",
+		"python.analysis.typeCheckingMode": "off",
 		"files.watcherExclude": {
 			"**/.git/objects/**": true,
 			"**/.git/subtree-cache/**": true,

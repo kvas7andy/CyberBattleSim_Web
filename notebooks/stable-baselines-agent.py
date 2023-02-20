@@ -7,7 +7,7 @@ from typing import cast
 from cyberbattle._env.cyberbattle_env import CyberBattleEnv
 from cyberbattle._env.cyberbattle_toyctf import CyberBattleToyCtf
 from cyberbattle._env.cyberbattle_tiny import CyberBattleTiny
-from cyberbattle._env.cyberbattle_tinymicro import CyberBattleTinyMicroFull
+from cyberbattle._env.cyberbattle_tinymicro import CyberBattleTinyMicroHT2
 
 import logging
 import sys
@@ -20,6 +20,7 @@ from stable_baselines3.common.logger import TensorBoardOutputFormat
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecEnv
 from cyberbattle._env.flatten_wrapper import FlattenObservationWrapper, FlattenActionWrapper
 import os
+import gym
 # th.cuda.set_device('cuda:3')
 device = th.device("cuda" if th.cuda.is_available() else "cpu")
 # th.cuda.set_device(device)
@@ -57,12 +58,21 @@ class SummaryWriterCallback(BaseCallback):
 logging.basicConfig(stream=sys.stdout, level=logging.ERROR, format="%(levelname)s: %(message)s")
 
 # %%
-env = CyberBattleTinyMicroFull(
+env = CyberBattleToyCtf(
     maximum_node_count=12,
     maximum_total_credentials=10,
     observation_padding=True,
     throws_on_invalid_actions=False,
 )
+
+# gym.make('CyberBattleTinyMicro-v2', observation_padding=True)
+
+# CyberBattleTinyMicroHT2(
+#     maximum_node_count=10,
+#     maximum_total_credentials=1,
+#     observation_padding=True,
+#     throws_on_invalid_actions=False
+# )
 
 
 # %%
@@ -78,6 +88,7 @@ env1 = FlattenActionWrapper(env)
 #  'credential_cache_matrix'
 #  'discovered_nodes_properties',
 
+# Ignore spaces which enlarge?
 ignore_fields = [
     # DummySpace
     '_credential_cache',
@@ -94,11 +105,13 @@ def return_env(env) -> CyberBattleEnv:
 
 
 if __name__ == "__main__":
-    env3 = make_vec_env(FlattenObservationWrapper, n_envs=4, vec_env_cls=SubprocVecEnv,
-                        env_kwargs=dict(env=cast(CyberBattleEnv, env1), ignore_fields=ignore_fields), monitor_dir=log_dir)
-    env_last = env3  # Monitor(env3, log_dir)
+    if False:
+        env3 = make_vec_env(FlattenObservationWrapper, n_envs=4, vec_env_cls=SubprocVecEnv,
+                            env_kwargs=dict(env=cast(CyberBattleEnv, env1), ignore_fields=ignore_fields), monitor_dir=log_dir)
+        env_last = env3  # Monitor(env3, log_dir)
 
-# %%
+    env_last = env2
+    # %%
     if 'a2c' in retrain:
         model_a2c = A2C("MultiInputPolicy", env_last, tensorboard_log=log_dir, verbose=1).learn(
             1e4, callback=SummaryWriterCallback())  # logger=None
@@ -106,7 +119,7 @@ if __name__ == "__main__":
 
     # %%
     if 'ppo' in retrain:
-        model_ppo = PPO("MultiInputPolicy", env2, tensorboard_log=log_dir, verbose=1).learn(
+        model_ppo = PPO("MultiInputPolicy", env_last, tensorboard_log=log_dir, verbose=1).learn(
             1000, progress_bar=True)
         model_ppo.save('ppo_trained_toyctf')
 
@@ -115,10 +128,10 @@ if __name__ == "__main__":
     # model = PPO("MultiInputPolicy", env2).load('ppo_trained_toyctf')
 
     # %%
-    obs = env2.reset()
+    obs = env_last.reset()
     for i in range(100):
         action, _states = model.predict(obs, deterministic=True)
-        obs, reward, done, info = env2.step(action)
+        obs, reward, done, info = env_last.step(action)
 
-    env2.render()
-    env2.close()
+    env_last.render()
+    env_last.close()

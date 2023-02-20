@@ -23,6 +23,7 @@ from plotly.subplots import make_subplots
 
 from cyberbattle._env.defender import DefenderAgent
 from cyberbattle.simulation.model import PortName, PrivilegeLevel
+from cyberbattle.simulation.actions import Reward
 from ..simulation import commandcontrol, model, actions
 from .discriminatedunion import DiscriminatedUnion
 from cyberbattle.simulation.config import logger
@@ -267,7 +268,7 @@ class EnvironmentBounds(NamedTuple):
             maximum_profiles_count=maximum_profiles_count,
             maximum_discoverable_credentials_per_action=maximum_discoverable_credentials_per_action,
             maximum_vulnerability_variables=maximum_vulnerability_variables,
-            port_count=len(identifiers.ports),
+            port_count=max(1, len(identifiers.ports)),
             property_count=len(identifiers.properties),
             local_attacks_count=len(identifiers.local_vulnerabilities),
             remote_attacks_count=maximum_node_count * maximum_profiles_count * maximum_vulnerability_variables
@@ -450,7 +451,7 @@ class CyberBattleEnv(gym.Env):
                  attacker_goal: Optional[AttackerGoal] = AttackerGoal(own_atleast_percent=1.0),
                  defender_goal=DefenderGoal(eviction=True),
                  defender_constraint=DefenderConstraint(maintain_sla=0.0),
-                 winning_reward=5000.0,
+                 winning_reward=Reward.WINNING_REWARD,  # 1000.0,
                  losing_reward=0.0,
                  renderer='',
                  observation_padding=False,
@@ -516,7 +517,7 @@ class CyberBattleEnv(gym.Env):
         maximum_profiles_count = self.__bounds.maximum_profiles_count
         maximum_vulnerability_variables = self.__bounds.maximum_vulnerability_variables
         property_count = self.__bounds.property_count
-        port_count = max(1, self.__bounds.port_count)
+        port_count = self.__bounds.port_count
 
         action_spaces: ActionSpaceDict = {
             "local_vulnerability": spaces.MultiDiscrete(
@@ -776,20 +777,24 @@ class CyberBattleEnv(gym.Env):
                                                     target_index,
                                                     :len(self.__discovered_profiles),
                                                     :len(vulnerabilities)] = 1
-                    bitmask["remote_vulnerability"][source_index,
-                                                    target_index,
-                                                    :len(self.__discovered_profiles),
-                                                    -len(self.__initial_environment.vulnerability_library):] = 1
+
+                    if len(self.__initial_environment.vulnerability_library):
+                        bitmask["remote_vulnerability"][source_index,
+                                                        target_index,
+                                                        :len(self.__discovered_profiles),
+                                                        -len(self.__initial_environment.vulnerability_library):] = 1
                     if self.__ip_local:
                         max_profiles_count = bitmask["remote_vulnerability"].shape[2]
                         bitmask["remote_vulnerability"][source_index,
                                                         target_index,
                                                         max_profiles_count // 2: max_profiles_count // 2 + len(self.__discovered_profiles),
                                                         :len(vulnerabilities)] = 1
-                        bitmask["remote_vulnerability"][source_index,
-                                                        target_index,
-                                                        max_profiles_count // 2: max_profiles_count // 2 + len(self.__discovered_profiles),
-                                                        -len(self.__initial_environment.vulnerability_library):] = 1
+
+                        if len(self.__initial_environment.vulnerability_library):
+                            bitmask["remote_vulnerability"][source_index,
+                                                            target_index,
+                                                            max_profiles_count // 2: max_profiles_count // 2 + len(self.__discovered_profiles),
+                                                            -len(self.__initial_environment.vulnerability_library):] = 1
 
                     bitmask["connect"][source_index,
                                        target_index,
@@ -948,7 +953,8 @@ class CyberBattleEnv(gym.Env):
             _credential_cache=self.__credential_cache.copy(),
             _discovered_nodes=self.__discovered_nodes.copy(),
             _discovered_profiles=self.__discovered_profiles.copy(),
-            _explored_network=self.__get_explored_network()
+            _explored_network=self.__get_explored_network(),
+            _deception_tracker=self.__deception_tracker.copy()
         )
 
         return observation
@@ -1388,6 +1394,7 @@ class CyberBattleEnv(gym.Env):
         observation['discovered_nodes_properties'] = self.__get_property_matrix()
         observation['nodes_privilegelevel'] = self.__get_privilegelevel_array()
         self.__owned_nodes_indices_cache = None
+        self.obs = observation
         return observation
 
     def render_as_fig(self, csv_filename=None):

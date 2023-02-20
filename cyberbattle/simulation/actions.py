@@ -25,7 +25,7 @@ from cyberbattle.simulation.model import FirewallRule, MachineStatus, PrivilegeL
 import cyberbattle.simulation.model as model
 from cyberbattle.simulation.config import logger
 
-Reward = float
+RewardType = float
 
 DiscoveredNodeInfo = TypedDict('DiscoveredNodeInfo', {
     'id': model.NodeID,
@@ -36,10 +36,10 @@ DiscoveredNodeInfo = TypedDict('DiscoveredNodeInfo', {
 class Penalty:
     """Penalties (=negative reward) returned for some actions taken in the simulation"""
     # penalty for generic suspiciousness
-    SUPSPICIOUSNESS = -50.0  # -7.0
+    SUPSPICIOUSNESS = -50  # -7.0
 
     # penalty for attempting a connection to a port that was not open
-    SCANNING_UNOPEN_PORT = -10.0
+    SCANNING_UNOPEN_PORT = -10
 
     # penalty for repeating the same exploit attempt
     REPEAT = -20
@@ -71,28 +71,32 @@ class Penalty:
     DECEPTION_PENALTY_FOR_AGENT = 0
 
 
-# Reward for the first time a local or remote attack
-# gets successfully executed since the last time the target node was imaged.
-# NOTE: the attack cost gets substracted from this reward.
-NEW_SUCCESSFULL_ATTACK_REWARD = 15
+class Reward:
+    # Reward for the first time a local or remote attack
+    # gets successfully executed since the last time the target node was imaged.
+    # NOTE: the attack cost gets substracted from this reward.
+    NEW_SUCCESSFULL_ATTACK_REWARD = 15
 
-# Fixed reward for discovering a new node
-NODE_DISCOVERED_REWARD = 3
+    # Fixed reward for discovering a new node
+    NODE_DISCOVERED_REWARD = 3
 
-# Fixed reward for discovering a new credential
-CREDENTIAL_DISCOVERED_REWARD = 3
+    # Fixed reward for discovering a new credential
+    CREDENTIAL_DISCOVERED_REWARD = 3
 
-# Fixed reward for discovering a new node property
-PROPERTY_DISCOVERED_REWARD = 2
+    # Fixed reward for discovering a new node property
+    PROPERTY_DISCOVERED_REWARD = 2
 
-# Fixed reward for discovering a new profile data, full or partial
-PROFILE_DISCOVERED_REWARD = 3
+    # Fixed reward for discovering a new profile data, full or partial
+    PROFILE_DISCOVERED_REWARD = 3
 
-# Fixed reward for revealing SSRF attack with local network disclosure
-IP_CHANGE_TO_IP_LOCAL = 10
+    # Fixed reward for revealing Reward.SSRF attack with local network disclosure
+    IP_CHANGE_TO_IP_LOCAL = 10
 
-# Fixed reward for using SSRF
-SSRF = 15
+    # Fixed reward for using SSRF
+    SSRF = 15
+
+    # Define WINNING_REWARD, which substitutes the ending step reward
+    WINNING_REWARD = 100.0
 
 
 class ErrorType(Enum):
@@ -404,8 +408,8 @@ class AgentActions:
     def __process_outcome(self,
                           expected_type: VulnerabilityType,
                           vulnerability_id: VulnerabilityID,
-                          node_id: model.NodeID,
-                          node_info: model.NodeInfo,
+                          node_id: model.NodeID,  # if local then source_node, if remote than target
+                          node_info: model.NodeInfo,  # relates to node_id, source/target node for local/remote
                           local_or_remote: bool,
                           failed_penalty: float,
                           throw_if_vulnerability_not_present: bool,
@@ -556,7 +560,7 @@ class AgentActions:
                 newly_discovered_properties = self.__mark_nodeproperties_as_discovered(node_id, outcome.discovered_properties, propagate=False)
                 for discovered_node_id in self._discovered_nodes:
                     self.__mark_nodeproperties_as_discovered(discovered_node_id, only_global_properties, propagate=False)
-                reward += newly_discovered_properties * PROPERTY_DISCOVERED_REWARD
+                reward += newly_discovered_properties * Reward.PROPERTY_DISCOVERED_REWARD
 
             # TOCHECK should be never true, as once we discover node_id, we should input it,
             # if target_node_id is not inside desicovered_nodes yet,
@@ -577,19 +581,19 @@ class AgentActions:
                         max_outcome_list.append(outcome)
                     continue
             elif not isinstance(outcome, model.ExploitFailed):
-                reward += NEW_SUCCESSFULL_ATTACK_REWARD
+                reward += Reward.NEW_SUCCESSFULL_ATTACK_REWARD
 
             if not self.__ip_local and ip_local_change:
-                reward += IP_CHANGE_TO_IP_LOCAL
+                reward += Reward.IP_CHANGE_TO_IP_LOCAL
 
             # Note: `discovered_nodes_value` should not be added to the reward
             # unless the discovered nodes got owned, but this case is already covered above
-            reward += newly_discovered_nodes * NODE_DISCOVERED_REWARD
-            reward += newly_discovered_credentials * CREDENTIAL_DISCOVERED_REWARD
-            reward += newly_discovered_profiles * PROFILE_DISCOVERED_REWARD
+            reward += newly_discovered_nodes * Reward.NODE_DISCOVERED_REWARD
+            reward += newly_discovered_credentials * Reward.CREDENTIAL_DISCOVERED_REWARD
+            reward += newly_discovered_profiles * Reward.PROFILE_DISCOVERED_REWARD
 
             if "ip.local" in str(precondition.expression) and ip_local_flag:
-                reward += SSRF
+                reward += Reward.SSRF
 
             if max_reward <= reward:
                 # print(newly_discovered_nodes, newly_discovered_credentials, newly_discovered_profiles, reward)
@@ -612,7 +616,7 @@ class AgentActions:
 
         if error_type != ErrorType.NOERROR:  # ver2: error_type == ErrorType.NOERROR ver3: max_reward < 0
             if error_type != ErrorType.REPEATED:
-                lookup_key = (vulnerability_id, local_or_remote, precondition, False)
+                lookup_key = (vulnerability_id, local_or_remote, max_precondition, False)
 
                 already_executed = node_id in self._discovered_nodes and lookup_key in self._discovered_nodes[node_id].last_attack
                 if already_executed:
@@ -664,7 +668,7 @@ class AgentActions:
 
             for discovered_node_id in self._discovered_nodes:
                 self.__mark_nodeproperties_as_discovered(discovered_node_id, only_global_properties)
-            reward += newly_discovered_properties * PROPERTY_DISCOVERED_REWARD
+            reward += newly_discovered_properties * Reward.PROPERTY_DISCOVERED_REWARD
 
         already_executed = False
         if node_id in self._discovered_nodes:
@@ -677,21 +681,21 @@ class AgentActions:
                 # should not come to REPEAT
                 pass
         elif not isinstance(outcome, model.ExploitFailed):
-            reward += NEW_SUCCESSFULL_ATTACK_REWARD
+            reward += Reward.NEW_SUCCESSFULL_ATTACK_REWARD
 
         self._discovered_nodes[node_id].last_attack[lookup_key] = datetime.now()
 
         if ip_local_change:
             self.__ip_local = True
-            reward += IP_CHANGE_TO_IP_LOCAL
+            reward += Reward.IP_CHANGE_TO_IP_LOCAL
             logger.info("Gained access to local network (possible to exploit SSRF)!")
 
-        reward += newly_discovered_nodes * NODE_DISCOVERED_REWARD
-        reward += newly_discovered_credentials * CREDENTIAL_DISCOVERED_REWARD
-        reward += newly_discovered_profiles * PROFILE_DISCOVERED_REWARD
+        reward += newly_discovered_nodes * Reward.NODE_DISCOVERED_REWARD
+        reward += newly_discovered_credentials * Reward.CREDENTIAL_DISCOVERED_REWARD
+        reward += newly_discovered_profiles * Reward.PROFILE_DISCOVERED_REWARD
 
         if "ip.local" in str(max_precondition.expression) and ip_local_flag:
-            reward += SSRF
+            reward += Reward.SSRF
             logger.info("Exploiting SSRF for access to endpoints through local network!")
 
         assert reward == max_reward, f'{reward} and {max_reward}, action {node_id} {str(max_precondition.expression)} {str(max_outcome)}'

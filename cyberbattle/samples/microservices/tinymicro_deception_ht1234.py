@@ -12,7 +12,7 @@ from cyberbattle.simulation.config import configuration
 
 
 ht_on = configuration.honeytokens_on
-ht_on = {"HT_v2tov1": True, "HT_phonebook": True, "HT_state": True, "HT_cloudactivedefense": True}
+ht_on = {"HT1_v2tov1": True, "HT2_phonebook": True, "HT3_state": True, "HT4_cloudactivedefense": True}
 
 global_vulnerability_library: OrderedDict[VulnerabilityID, VulnerabilityInfo] = OrderedDict(
     [] +
@@ -20,19 +20,19 @@ global_vulnerability_library: OrderedDict[VulnerabilityID, VulnerabilityInfo] = 
         description="Deceptive honeytoken with detection point",
         precondition=m.Precondition("~username.NoAuth&state"),  # ~script_block,
         type=VulnerabilityType.REMOTE,
-        outcome=m.concatenate_outcomes((m.ProbeFailed, m.DetectionPoint))(detection_point_name="HT_state"),
+        outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(cost=10, detection_point_name="HT3_state"),
         reward_string="Honeytoken tamepring: changing state value in cookies leads to no change",
-    ))] * ht_on["HT_state"] +
+    ))] * ht_on["HT3_state"] +
     [("V2toV1", VulnerabilityInfo(  # HT1 v2tov1
         description="Version change triggers deceptive token",
         # precondition=m.Precondition("~script_block"),
         type=VulnerabilityType.REMOTE,
-        outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="HT_v2tov1"),
+        outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="HT1_v2tov1"),
         reward_string="Forced browsing attempt: changing version of platform value leads to no change",
-    ))] * ht_on["HT_v2tov1"]
+    ))] * ht_on["HT1_v2tov1"]
 )
 
-global_properties: List[PropertyName] = ["username_password_restrictions"] + ht_on["HT_state"] * ["state"] + ht_on["HT_cloudactivedefense"] * ["property.cloudactivedefense"]  # HT3 state ## HT4 cloudactive defense
+global_properties: List[PropertyName] = ["username_password_restrictions"] + ht_on["HT3_state"] * ["state"] + ht_on["HT4_cloudactivedefense"] * ["property.cloudactivedefense"]  # HT3 state ## HT4 cloudactive defense
 initial_properties: List[PropertyName] = ["property.git", "robots.txt", "thisdoesnotexist"]
 
 # Network nodes involved in the myMedcialPortal CTF
@@ -49,7 +49,7 @@ nodes = {
                 type=VulnerabilityType.LOCAL,
                 outcome=m.concatenate_outcomes((m.LeakedNodesId, m.ProbeSucceeded))(
                     discovered_nodes=["GET_/v2", "GET_/v2/login", "POST_/v2/register", "GET_/v2/messages",
-                                      "GET_/v2/documents"] + ht_on["HT_phonebook"] * ["GET_/v2/phonebook"],  # HT2 phonebook
+                                      "GET_/v2/documents"] + ht_on["HT2_phonebook"] * ["GET_/v2/phonebook"],  # HT2 phonebook
                     discovered_properties=["script_block"]),
                 reward_string="Inspect: Viewing the web page source reveals main endpoints",
                 cost=1.0
@@ -68,8 +68,8 @@ nodes = {
                 description="Scan HTTP requests payloads",
                 type=VulnerabilityType.LOCAL,
                 outcome=m.concatenate_outcomes((m.ProbeSucceeded,))(discovered_properties=["property.cloudactivedefense"]) \
-                if ht_on["HT_cloudactivedefense"] else m.concatenate_outcomes((m.ProbeFailed,))(),  # HT4 cloudactive defense
-                reward_string="Found multiple properties (username, password, server?)" + ht_on["HT_cloudactivedefense"] * "among them the most important: property.cloudactivedefense",  # HT4 cloudactive defense
+                if ht_on["HT4_cloudactivedefense"] else m.concatenate_outcomes((m.ProbeFailed,))(),  # HT4 cloudactive defense
+                reward_string="Found multiple properties (username, password, server?)" + ht_on["HT4_cloudactivedefense"] * "among them the most important: property.cloudactivedefense",  # HT4 cloudactive defense
                 cost=1.0
             ))
         ]),
@@ -85,9 +85,9 @@ nodes = {
             ("BrowsingTarget", VulnerabilityInfo(
                 description="Finding through HTTP requests special properties",
                 type=VulnerabilityType.REMOTE,
-                precondition=[m.Precondition("true"), m.Precondition("thisdoesnotexist")] + ht_on["HT_cloudactivedefense"] * [m.Precondition("property.cloudactivedefense")] +  # HT4 cloudactive defense
+                precondition=[m.Precondition("true"), m.Precondition("thisdoesnotexist")] + ht_on["HT4_cloudactivedefense"] * [m.Precondition("property.cloudactivedefense")] +  # HT4 cloudactive defense
                 [m.Precondition("property.git"), m.Precondition("robots.txt")],
-                outcome=[m.ExploitFailed()] * 2 + ht_on["HT_cloudactivedefense"] * [m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="HT_cloudactivedefense")] +  # HT4 cloudactive defense
+                outcome=[m.ExploitFailed()] * 2 + ht_on["HT4_cloudactivedefense"] * [m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="HT4_cloudactivedefense")] +  # HT4 cloudactive defense
                         [m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="DP_git")] +
                         [m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="DP_robots")],
                 reward_string=["Forced browsing attempts"] * 4 +
@@ -145,7 +145,7 @@ nodes = {
                 type=VulnerabilityType.REMOTE,
                 outcome=m.concatenate_outcomes((m.LeakedProfiles, m.ProbeSucceeded, m.LeakedNodesId))(
                     discovered_profiles=["username.patient&id.UUIDfake"],
-                    discovered_properties=[] + ht_on["HT_state"] * ["state"],  # HT3 state
+                    discovered_properties=[] + ht_on["HT3_state"] * ["state"],  # HT3 state
                     discovered_nodes=["GET_/v2/users"]),
                 reward_string="Register AlicAnon patient to be able to access more info + discover cookie tokens (i.e. state)",
                 cost=1.0
@@ -238,7 +238,7 @@ nodes = {
         ])),
 }
 
-if ht_on["HT_phonebook"]:
+if ht_on["HT2_phonebook"]:
     nodes["GET_/v2/phonebook"] = m.NodeInfo(  # HT2 phonebook
         services=[],
         value=0,
@@ -246,7 +246,7 @@ if ht_on["HT_phonebook"]:
             ("", VulnerabilityInfo(
                 description="DECEPTION trap: honeypot - endpoint phonebook",
                 type=VulnerabilityType.REMOTE,
-                outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="HT_phonebook"),
+                outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="HT2_phonebook"),
                 reward_string="Cannot GET_/v2/phonebook",
                 cost=1.0
             ))
