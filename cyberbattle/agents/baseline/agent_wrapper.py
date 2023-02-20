@@ -88,6 +88,7 @@ class Feature_active_node_age(Feature):
         assert node is not None, 'feature only valid in the context of a node'
 
         discovered_node_count = a.observation['discovered_node_count']
+        discovered_node_count = a.observation['discovered_node_count']
 
         assert node < discovered_node_count, f'invalid node index {node} (not discovered yet)'
 
