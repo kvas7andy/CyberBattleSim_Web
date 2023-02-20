@@ -352,6 +352,7 @@ class CyberBattleEnv(gym.Env):
         self.__episode_rewards: List[float] = []
         # The actuator used to execute actions in the simulation environment
         self._actuator = actions.AgentActions(self.__environment, throws_on_invalid_actions=self.__throws_on_invalid_actions)
+        self._actuator = actions.AgentActions(self.__environment, throws_on_invalid_actions=self.__throws_on_invalid_actions)
         self._defender_actuator = actions.DefenderAgentActions(self.__environment)
 
         self.__stepcount = 0
@@ -908,8 +909,8 @@ class CyberBattleEnv(gym.Env):
 
         elif "connect" in action:
             source_node, target_node, port_index, credential_cache_index = action["connect"]
-            if 0 > credential_cache_index >= len(self.__credential_cache):
-                return actions.ActionResult(reward=-1, outcome=None, precondition="", profile="", reward_string="")
+            if credential_cache_index < 0 or credential_cache_index >= len(self.__credential_cache):
+                return actions.ActionResult(reward=-1, outcome=None)
 
             source_node_id = self.__internal_node_id_from_external_node_index(source_node)
             target_node_id = self.__internal_node_id_from_external_node_index(target_node)
@@ -1128,6 +1129,10 @@ class CyberBattleEnv(gym.Env):
                  for c in self.__credential_cache]
 
         obs['credential_cache_matrix'] = self.__pad_tuple_if_requested(cache, 2, self.__bounds.maximum_total_credentials)
+        cache = [numpy.array([self.__find_external_index(c.node), self.__portname_to_index(c.port)])
+                 for c in self.__credential_cache]
+
+        obs['credential_cache_matrix'] = self.__pad_tuple_if_requested(cache, 2, self.__bounds.maximum_total_credentials)
 
         # Dynamic statistics to be refreshed
         obs['credential_cache_length'] = len(self.__credential_cache)
@@ -1340,6 +1345,8 @@ class CyberBattleEnv(gym.Env):
           V  (            |                 )
 
         """
+        return numpy.block([convert_matrix.to_numpy_array(observation['_explored_network'], weight='kind_as_float'),
+                            numpy.array(observation['discovered_nodes_properties'])])
         return numpy.block([convert_matrix.to_numpy_array(observation['_explored_network'], weight='kind_as_float'),
                             numpy.array(observation['discovered_nodes_properties'])])
 

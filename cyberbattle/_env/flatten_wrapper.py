@@ -109,12 +109,6 @@ class FlattenActionWrapper(ActionWrapper):
             # target  node
             env.bounds.maximum_node_count,
 
-            # # profiles
-            # env.bounds.maximum_profiles_count,
-
-            # # variables of each vulnerability
-            # env.bounds.maximum_vulnerability_variables,
-
             # target port (for connect action only)
             env.bounds.port_count,
 
