@@ -1,10 +1,10 @@
 # SAP version of CyberBattleSim
 
-Research project on the development of high-fidelity simulator for cloud active defense on application layer.
+Research project on the development of high-fidelity simulator for cloud active defense occured on the web application layer.
 
 ## Introduction
 
-Repository consists of source files of simulator ([cyberbattle](cyberbattle)) and running files for DQL training ([notebooks](cyberbattle/agents/baseline/notebooks/)).
+Repository mainly consists of source files of the microservices simulator ([cyberbattle](cyberbattle)) and files running DQL training ([notebooks](cyberbattle/agents/baseline/notebooks/)).
 
 In progress:
 1. Honeytokens experiments
@@ -15,7 +15,7 @@ In progress:
 ## Installation
 
 ### Creating & running docker container
-Updated the original section [Recreating the Docker image](#recreating-the-docker-image) 
+Modification of the original section [Recreating the Docker image](#recreating-the-docker-image) 
 
 #### Recreating the Docker image
 
@@ -28,15 +28,16 @@ This will run the container in detached mode, so you can connect to it via VSCOD
 For installation of additional python modules (for example, pandas) update [requirements.txt](requirements.txt)
 
 Known issues:
-- Do not update gym yet without sync with `gymnasium` module: recent repository migration to `gymnasium` should be handled in our case with attention and watch for update on [microsoft/CyberBattleSim](https://github.com/microsoft/CyberBattleSim). Now it is upstream remote so you can easilty `git pull upstream main` to get updates.
+- **Do not update gym** without sync with `gymnasium` repository: recent repository [migration compatibility](https://gymnasium.farama.org/content/gym_compatibility/) with `gymnasium` should be handled with exceptional attention OR delegate the migration to original repository [microsoft/CyberBattleSim](https://github.com/microsoft/CyberBattleSim). Now it is upstream remote so you can easilty `git pull upstream main` to get updates.
 
 ### VsCode
 
-To interact with container and run jupyter notebook files, use VSCODE as your main instrument, as both in the original and current release there is NO ability to forward port from container to server and connect to running on the server jupyter notebook.
+To interact with container, run its python modules, bash scripts and jupyter notebooks, **use VSCODE** as your main instrument. Both original and current simualtor version have NO ability to forward any port from container to the host through server, thus it is **impossible** to connect to jupyter notebook server running inside container.
 
-Thus main workspace would be VSCODE with several 2 necessary extensions: Remote SSH, Remote Explorer. Optionally install Jupyter, GitLens extensions.
+For VSCODE install 2 necessary extensions: Remote SSH, Remote Explorer. _Optionally_ install Jupyter, GitLens extensions.
 
 #### Connecting and checking the container
+If there is no necessity in using ssh-key for login, pass 1.1 and 5.
 1. In Remote SSH, within SSH tab -> "gear" symbol,  configure `~/.ssh/config` file on the host with this fields:
 ```bash
 Host NAME 
@@ -45,32 +46,41 @@ Host NAME
     IdentityFile PATH_TO_PRIVATE_SSH_KEY 
     ForwardAgent yes
 ```
-  With `ForwardAgent` and `Identityfile` ssh configuration will pass ssh keys shared with github (enterprise) account.
-
+1.1  With `ForwardAgent` and `Identityfile` ssh configuration will pass ssh keys shared with github (enterprise) account.
 2. Go to Remote Explorer tab -> choose Remote from the drop down box -> choose NAME to connect to as remote server -> Connect and open inside window or separately
 3. In any VSCODE window open Remote Explorer tab -> choose Containers -> Choose running container of cyberbattlesim ([creat and run docker section])(#running-docker-container)
-4. Go to Explorer tab -> open Folder "/root".
-#### (Optional) Github push/pull within VSCODE, setup SSH key
+4. Go to Explorer tab -> open Folder "/root" OR open presaved workspace `exproot.code-workspace` which also includes `/logs/exper` directory to view the experiment results (more detailed further).
+5. Check Github push/pull within VSCODE, setup SSH key
 
-TODO: just before, create & run docker container, conenct to it & connect github account using ssh-key. Next step: try pull/push/fetch from remote github. If any issues occur, post additional actions here during troubleshooting.
+Firstly, while connected to server only.
+ **To check that SSH forwarding from local computer is setup, run:**
+1) `echo "$SSH_AUTH_SOCK"` to see if the agent was forwarded
+2) `ssh-add -L` and check the lines include ssh-key credentials. 
+3) If there is "no identity found" output from 2), please try to include in `config` this:
+  ```bash
+  Host NAME
+    ...
+    LocalForward localhost:23750 /var/run/docker.sock 
+  ```
+Secondly, create & run docker container, connect to it & connect github account using ssh-key. Next step: try pull/push/fetch from remote github. If any issues occur, post additional actions here during troubleshooting.
 
-Use Source Control tab and make fetch/pull/push action within VSCODE. If you enounter issues you can always a) work in VSCODE with terminal; b) copy ssh-key inside .ssh of container c) ... (whatever suits your workflow)
+Use Source Control tab and make fetch/pull/push action within VSCODE. If you enounter issues you can always a) work in VSCODE with terminal; b) copy ssh-key inside .ssh of container; 
 
 ## Running the simulator
 
-From now on work completely inside VSCODE, although it still possible to connect to remote server with container using terminal window.  use command line same way it is described below, but inside VSCODE. 
+From now on work only inside VSCODE, although it is still possible to connect to remote server with container using terminal, i.e. use command line same way it is described below. 
 
-1. Open folder "/root", you will initialize your workspace with openning this folder and .git folder read for "Source Control" tab. 
+1. Open folder "/root"
 2. You can check if any files uncommited in Source Control, and try pull for updates
-3. Testing simulator 
-3. Training files  [Recreating the Docker image](#recreating-the-docker-image)
+3. Training files [section](#running-training-files)
+4. Testing agnets performance in simulator [section](#testing-simulator-with-manual-commands-and-learned-agent) 
 
 ### Project structure
 
 |    Part   | Files | Description    |
 | :---:        |    :----:   |          :---: |
 | Running the simulator for test & training procedure  | agents/baseline/notebooks: 1) training - [notebook_dql_debug_with_tinymicro.py](cyberbattle/agents/baseline/notebooks/notebook_dql_debug_with_tinymicro.py) + [learner.py](cyberbattle/agents/baseline/learner.py) + [run.py](cyberbattle/agents/baseline/run.py); 2) testing [notebook_debug_tinymicro.py](cyberbattle/agents/baseline/notebooks/notebook_debug_tinymicro.py)      | Training & testing scripts usage in sections for [training](#running-training-files) & [testing](#testing-simulator-code-and-sundew-environment); [learner.py](cyberbattle/agents/baseline/learner.py) includes training process code inside [epsilon_greedy_search(..)](cyberbattle/agents/baseline/learner.py#L345) & evaluation code in [evaluate_model(...)](cyberbattle/agents/baseline/learner.py#L155)  |
-| Running experiments   | ./run_exper_[...]        | Bash files runnning experiments as separate pipelines of: 1) converting .py file to .ipynb jupter notebook file + 2) running it with `papermill` with `-p parameter_name parameter_value`  |
+| Running experiments   | ./run_exper_[...].sh       | Bash files runnning experiments as separate pipelines of: 1) converting .py file to .ipynb jupter notebook file + 2) running it with `papermill` with `-p parameter_name parameter_value`  |
 | Simulator description      |   [actions.py](cyberbattle/simulation/actions.py), [model.py](cyberbattle/simulation/model.py), [cyberbattle_env.py](cyberbattle/_env/cyberbattle_env.py)  | Most of funcitonality is divided through files cyberbattle_env.py (gym environment with observations, action_masks, render, etc.), model.py (building blocks of cloud web application model), actions.py (agents actions & processing the reward)  |
 | Logging & configuration files | [config.py](cyberbattle/simulation/config.py), [.env](.env) + other .env.data, .env.yml in training saved in exper/.../training folders  |  Include environment variables, processed wile training & testing in [notebook_dql_debug_with_tinymicro.py](cyberbattle/agents/baseline/notebooks/notebook_dql_debug_with_tinymicro.py) &  notebook_debug_tinymicro.py](cyberbattle/agents/baseline/notebooks/notebook_debug_tinymicro.py)ww |
 | Types of attacking agents     | agents/baseline/: [agent_dql.py](cyberbattle/agents/baseline/agent_dql.py)  + [agent_wrapper.py](cyberbattle/agents/baseline/agent_wrapper.py)    |  Policy network  & update procedures for DQN + general feature engineering |
@@ -95,7 +105,7 @@ For both commands the output will be decided depending on `log_results = True` f
 
 Other parameters to tune are:
 - `iteration_count:int` number of steps per episode (default 50, form environment initial configuartions in [__init__.py](cyberbattle/__init__.py#L55) `max_episode_steps`)
-- `training_episode_count:int` number of episodes to trian on, which actually defines number of steps: `training_steps_count = training_episode_count* iteration_count`
+- `training_episode_count:int` number of episodes to train on, which actually defines number of steps: `training_steps_count = training_episode_count* iteration_count`
 - `eval_freq:int` & `eval_episode_count:int` to define how frequently to pause training to evaluate model without exploration & for how many episodes to evaluate.
 - `epsilon_exponential_decay:int` (.env: `EPS_EXP_DECAY`) is episode number on which you want epsilon-greedy policy to be minimum on exploration (`epsilon_minimum = 0.1`)
 - `reward_clip:bool` (in progress) flag defines if we want our rewards to be scaled & clipped to [-1, 1], which potentially let DQN converge faster and monotonically (not always the case, reason for this is large winning_reward)
@@ -150,7 +160,7 @@ which define the pipeline of converting `.py` training file to jupyternotebook, 
 
 The visual outputs better check generated `logfile.log` file as the cmd outputs do not include training progressbar.
 
-## Testing simulator with manual commands & learned agent
+### Testing simulator with manual commands and learned agent
 
 To test the algorithm use either [notebook_debug_tinymicro.py](cyberbattle/agents/baseline/notebooks/notebook_debug_tinymicro.py) or [run.py](cyberbattle/agents/baseline/run.py) with `--eval --no-train`.
 
@@ -212,13 +222,15 @@ observation, reward, done, info = env .step(gym_action)
 2) Experiments were made with `gamma=[0.015|0.1|0.25|0.7|0.9]`, when closer to 1, takes long-term influence of previous rewards, as discounted factor of cumulative rewards to learn onto. **Results**: weirdly, with increasing `gamma` from intial 0.015 value up to 0.25 learned becomes smoother in loss optimizer, but with 0.7 or 0.9 learning diverges, so that learning long-term relationship becomes harder and probably, because of the ctf flag capturing `winning_reward` is too large. **TODO:** test on `winning_reward == 0`, which basically is ok, because in this case we still want to end episode s earky as possible (because of repeats will penalize us).
 ![](docs/.attachments/reward_clip_gamma_results.png)
 
+<br />
+<br />
+<br />
+<br />
+<br />
+<br />
 
 
-
-
-
-
-
+# Appendix
 # CyberBattleSim [microsoft repository](https://github.com/microsoft/CyberBattleSim)
 
 > April 8th, 2021: See the [announcement](https://www.microsoft.com/security/blog/2021/04/08/gamifying-machine-learning-for-stronger-security-and-ai-models/) on the Microsoft Security Blog.
