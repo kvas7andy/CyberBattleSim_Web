@@ -15,12 +15,20 @@ In progress:
 ## Installation
 
 ### Creating & running docker container
-Refer to the original section [Recreating the Docker image](#recreating-the-docker-image)
-For installationof additional python modules (for example, pandas) update [requirements.txt](requirements.txt)
+Updated the original section [Recreating the Docker image](#recreating-the-docker-image) 
+
+#### Recreating the Docker image
+
+```bash
+docker build -t cyberbattle:1.1 .
+docker run -it -d -v {dir_for_log_at_server}:/logs/exper --rm cyberbattle:1.1 bash
+```
+This will run the container in detached mode, so you can connect to it via VSCODE later, and for saved experiments link folder `dir_for_log_at_server` to the container's internal `/logs/exper`.
+
+For installation of additional python modules (for example, pandas) update [requirements.txt](requirements.txt)
 
 Known issues:
-- `gymnasium` module for environments, instead of `gym`: recent repository migration to `gymnasium` should be handled with attention unless [microsoft/CyberBattleSim](https://github.com/microsoft/CyberBattleSim) will generate changes to `Dockerfile` and `requirements.txt`.
-
+- Do not update gym yet without sync with `gymnasium` module: recent repository migration to `gymnasium` should be handled in our case with attention and watch for update on [microsoft/CyberBattleSim](https://github.com/microsoft/CyberBattleSim). Now it is upstream remote so you can easilty `git pull upstream main` to get updates.
 
 ### VsCode
 
