@@ -103,3 +103,6 @@ fi
 #if [ -f /etc/bash_completion ] && ! shopt -oq posix; then
 #    . /etc/bash_completion
 #fi
+
+### PYTHONPATH update to exclude including everywehre "import cyberbattle"
+export PYTHONPATH=$PYTHONPATH:/root
