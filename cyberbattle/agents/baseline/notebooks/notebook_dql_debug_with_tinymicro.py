@@ -62,7 +62,7 @@ papermill_as_main = False
 only_eval_summary = False
 # Algorithm specific parameters
 learning_rate = 0.001  # 0.01
-gamma = 0.015  # 0.015  # 0.015
+gamma = float(os.getenv('GAMMA', 0.015))  # 0.015  # 0.015
 # %%
 iteration_count = max_episode_steps if iteration_count is None else iteration_count
 os.environ['TRAINING_EPISODE_COUNT'] = os.getenv('TRAINING_EPISODE_COUNT', 1000) if training_episode_count is None else str(training_episode_count)
