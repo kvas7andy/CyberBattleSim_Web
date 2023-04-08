@@ -1,4 +1,5 @@
-# SAP version of CyberBattleSim
+# Web Application version of CyberBattleSim
+Authors: Kvasov Andrei, Sahin Merve, Hebert Cedric
 
 Research project on the development of high-fidelity simulator for cloud active defense occured on the web application layer.
 
