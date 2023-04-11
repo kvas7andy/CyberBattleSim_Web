@@ -1,4 +1,5 @@
-# SAP version of CyberBattleSim
+# Web Application version of CyberBattleSim
+Authors: Kvasov Andrei, Sahin Merve, Hebert Cedric
 
 Research project on the development of high-fidelity simulator for cloud active defense occured on the web application layer.
 
@@ -21,7 +22,7 @@ Modification of the original section [Recreating the Docker image](#recreating-t
 
 ```bash
 docker build -t cyberbattle:1.1 .
-docker run -it -d -v {dir_for_log_at_server}:/logs/exper --rm cyberbattle:1.1 bash
+docker run -it -d -v {absolute_path_at_server}:/logs/exper --gpus all --rm cyberbattle:1.1 bash
 ```
 This will run the container in detached mode, so you can connect to it via VSCODE later, and for saved experiments link folder `dir_for_log_at_server` to the container's internal `/logs/exper`.
 
