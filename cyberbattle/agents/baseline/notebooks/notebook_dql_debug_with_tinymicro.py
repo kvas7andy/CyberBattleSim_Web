@@ -29,6 +29,7 @@ import os
 from dotenv import load_dotenv, dotenv_values
 import pandas as pd
 import datetime
+import time
 import cyberbattle.agents.baseline.learner as learner
 import cyberbattle.agents.baseline.agent_wrapper as w
 import cyberbattle.agents.baseline.agent_dql as dqla
@@ -49,6 +50,7 @@ max_episode_steps = 50
 log_results = os.getenv("LOG_RESULTS", 'False').lower() in ('true', '1', 't')
 gymid = os.getenv("GYMID", 'CyberBattleTinyMicro-v0')
 log_level = os.getenv('LOG_LEVEL', "info")
+seed = int(os.getenv('SEED', 0))
 iteration_count = None
 honeytokens_on = None
 training_episode_count = None
@@ -62,25 +64,16 @@ papermill_as_main = False
 only_eval_summary = False
 # Algorithm specific parameters
 learning_rate = 0.001  # 0.01
-gamma = 0.015  # 0.015  # 0.015
+gamma = float(os.getenv('GAMMA', 0.5))  # 0.015
 # %%
-iteration_count = max_episode_steps if iteration_count is None else iteration_count
-os.environ['TRAINING_EPISODE_COUNT'] = os.getenv('TRAINING_EPISODE_COUNT', 1000) if training_episode_count is None else str(training_episode_count)
-training_episode_count = int(os.environ['TRAINING_EPISODE_COUNT'])
-
-log_dir = '/logs/exper/' + "notebook_dql_debug_with_tinymicro"
-# convert the datetime object to string of specific format
-datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-log_dir = os.path.join(log_dir, gymid, datetime_str)
-os.environ['LOG_DIR'] = log_dir
-
 os.environ['LOG_RESULTS'] = str(log_results).lower()
 exploit_train = "exploittrain" * train_while_exploit + "exploitinfer" * (1 - train_while_exploit)
 
 
 # %%
 def main(gymid=gymid, training_episode_count=training_episode_count,
-         eval_episode_count=eval_episode_count, iteration_count=iteration_count, epsilon_exponential_decay=epsilon_exponential_decay,
+         eval_episode_count=eval_episode_count, iteration_count=iteration_count,
+         epsilon_exponential_decay=epsilon_exponential_decay, seed=seed,
          reward_clip=reward_clip, args=None):
     if args is not None:
         training_episode_count = args.training_episode_count
@@ -89,6 +82,25 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
         gymid = args.gymid
         reward_clip = args.reward_clip
         epsilon_exponential_decay = args.eps_exp_decay
+        seed = args.seed
+
+    if not seed:
+        seed = time.time()
+    seed = round(seed)
+
+    iteration_count = max_episode_steps if iteration_count is None else iteration_count
+    os.environ['TRAINING_EPISODE_COUNT'] = os.getenv('TRAINING_EPISODE_COUNT', 1000) if training_episode_count is None else str(training_episode_count)
+    training_episode_count = int(os.environ['TRAINING_EPISODE_COUNT'])
+
+    os.environ["GYMID"] = str(gymid)
+    os.environ['SEED'] = str(seed)
+    os.environ['REWARD_CLIP'] = str(log_results).lower()
+
+    log_dir = '/logs/exper/' + "notebook_dql_debug_with_tinymicro"
+    # convert the datetime object to string of specific format
+    datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_dir = os.path.join(log_dir, gymid, datetime_str)
+    os.environ['LOG_DIR'] = log_dir
 
     os.makedirs(log_dir, exist_ok=True) if log_results else ''
     configuration.update_globals(log_dir, gymid, log_level, log_results)
@@ -119,6 +131,7 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
 
     os.makedirs(os.path.join(log_dir, 'training'), exist_ok=True) if log_results else ''
     env_config = json.loads(json.dumps(dotenv_values()))
+    env_config = {k: os.getenv(k, v) for k, v in env_config.items()}  #
     if configuration.log_results:
         with open(os.path.join(log_dir, 'training', '.env.data.yml'), 'w') as outfile:
             yaml.dump(env_config, outfile, default_flow_style=False)
@@ -152,6 +165,7 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
         eval_episode_count=eval_episode_count,
         eval_freq=eval_freq,
         mean_reward_window=mean_reward_window,
+        seed=seed,
         verbosity=Verbosity.Quiet,
         render=False,
         render_last_episode_rewards_to=os.path.join(log_dir, 'training') if log_results else None,

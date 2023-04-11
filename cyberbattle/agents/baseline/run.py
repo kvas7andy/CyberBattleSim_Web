@@ -16,6 +16,7 @@ Example usage:
 import torch
 import gym
 import logging
+import time
 import sys
 import asciichartpy
 import argparse
@@ -70,6 +71,9 @@ parser.add_argument('--eps_exp_decay', default=2000, type=int,
 
 parser.add_argument('--reward_clip', action='store_true', help='Apply reward clipping to [-1, 1]')
 parser.set_defaults(reward_clip=False)
+
+parser.add_argument('--seed', default=time.time(), type=int,
+                    help='special seeding (random with current CPU time in sec by default)')
 
 parser.add_argument('--random_agent', dest='run_random_agent', action='store_true', help='run the random agent as a baseline for comparison')
 parser.add_argument('--no-random_agent', dest='run_random_agent', action='store_false', help='do not run the random agent as a baseline for comparison')
