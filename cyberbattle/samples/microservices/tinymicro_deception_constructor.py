@@ -16,7 +16,7 @@ global_properties: List[PropertyName] = None
 initial_properties: List[PropertyName] = None
 
 
-def reconfigure_environement(ht_on: dict) -> None:
+def reconfigure_environment(ht_on: dict) -> None:
     # ht_on =  {"HT1_v2tov1": True, "HT2_phonebook": False, "HT3_state": False, "HT4_cloudactivedefense": False}
 
     global global_vulnerability_library, global_properties, initial_properties, nodes, ENV_IDENTIFIERS
