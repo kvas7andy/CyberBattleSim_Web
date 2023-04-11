@@ -10,16 +10,19 @@ from . import agents
 from ._env.cyberbattle_env import AttackerGoal, DefenderGoal
 from .samples.chainpattern import chainpattern
 from .samples.toyctf import toy_ctf, tinytoy
-from .samples.microservices import tinymicro, tinymicro_deception_dp_only, tinymicro_deception_full
+from .samples.microservices import tinymicro, tinymicro_deception_dp_only, tinymicro_deception_full, tinymicro_deception_constructor
 from .samples.microservices import tinymicro_deception_ht1, tinymicro_deception_ht2, tinymicro_deception_ht3, tinymicro_deception_ht4
 from .samples.microservices import tinymicro_deception_ht12, tinymicro_deception_ht123, tinymicro_deception_ht1234
 from .samples.active_directory import generate_ad
 from .simulation import generate_network, model
+from .simulation.config import configuration
 
 __all__ = (
     'simulation',
     'agents',
 )
+
+ht_on = configuration.honeytokens_on
 
 
 def register(id: str, cyberbattle_env_identifiers: model.Identifiers, **kwargs):
@@ -119,6 +122,34 @@ register(
             },
     max_episode_steps=50,
 )
+
+
+max_ht_on = len(ht_on)
+for i in range(1, max_ht_on + 1):
+    for j in range(i + 1, max_ht_on + 1):
+
+        ver = str(i) + str(j)
+        if 'CyberBattleTinyMicro-v' + ver in registry.env_specs:
+            del registry.env_specs['CyberBattleTinyMicro-v' + ver]
+
+        ht_on = dict(zip(list(ht_on.keys()),
+                         [True if k in [i, j] else False for k in range(max_ht_on + 1)]))
+        tinymicro_deception_constructor.reconfigure_environement(ht_on)
+
+        register(
+            id='CyberBattleTinyMicro-v' + ver,
+            cyberbattle_env_identifiers=tinymicro_deception_constructor.ENV_IDENTIFIERS,
+            entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroHT',
+            kwargs={'initial_environment': tinymicro_deception_constructor.new_environment(),
+                    'defender_agent': None,
+                    'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
+                    'defender_goal': DefenderGoal(eviction=True),
+                    'maximum_total_credentials': 1,
+                    'maximum_node_count': 10
+                    },
+            max_episode_steps=50,
+        )
+
 
 if 'CyberBattleTinyMicro-v123' in registry.env_specs:
     del registry.env_specs['CyberBattleTinyMicro-v123']
