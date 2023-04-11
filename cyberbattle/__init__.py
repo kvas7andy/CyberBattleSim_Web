@@ -134,7 +134,7 @@ for i in range(1, max_ht_on + 1):
 
         ht_on = dict(zip(list(ht_on.keys()),
                          [True if k in [i, j] else False for k in range(max_ht_on + 1)]))
-        tinymicro_deception_constructor.reconfigure_environement(ht_on)
+        tinymicro_deception_constructor.reconfigure_environment(ht_on)
 
         register(
             id='CyberBattleTinyMicro-v' + ver,
