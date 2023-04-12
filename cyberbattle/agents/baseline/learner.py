@@ -10,10 +10,13 @@ from .plotting import PlotTraining, plot_averaged_cummulative_rewards
 from .agent_wrapper import AgentWrapper, EnvironmentBounds, Verbosity, ActionTrackingStateAugmentation
 from cyberbattle.simulation.config import logger, configuration
 import numpy as np
+import torch
+import random
 from cyberbattle._env import cyberbattle_env
 from typing import Tuple, Optional, TypedDict, List
 import progressbar
 import abc
+from torch.utils.tensorboard.summary import hparams
 
 
 class Learner(abc.ABC):
@@ -58,6 +61,11 @@ class Learner(abc.ABC):
     def stateaction_as_string(self, action_metadata) -> str:
         return ''
 
+    def name(self) -> str:
+        """Return the name of the agent"""
+        # p = len(type(Learner(self.env_properties, [])).__name__) + 1
+        return type(self).__name__
+
 
 class RandomPolicy(Learner):
     """A policy that does not learn and only explore"""
@@ -100,7 +108,7 @@ TrainedLearner = TypedDict('TrainedLearner', {
 })
 
 
-def write_to_summary(writer, all_rewards, epsilon, loss_string, observation, iteration_count, steps_done, writer_tag="training"):
+def write_to_summary(writer, all_rewards, epsilon, loss_string, observation, iteration_count, run_mean, steps_done, writer_tag="training"):
     """
     all_rewards: - (training case) list of rewards per episode; (evaluation case) list of sum of rewards during episode
     """
@@ -111,11 +119,12 @@ def write_to_summary(writer, all_rewards, epsilon, loss_string, observation, ite
     # TODO: make higher verbosity level
     # writer.add_histogram(writer_tag + "/rewards", all_rewards, steps_done)
     writer.add_scalar(writer_tag + "/epsilon", epsilon, steps_done) if is_training else ''
-    writer.add_scalar(writer_tag + "/loss", float(loss_string), steps_done) if is_training and loss_string else ''
+    writer.add_scalar("loss", float(loss_string.split("=")[-1]), steps_done) if is_training and loss_string else ''
 
     n_positive_actions = np.sum(np.array(all_rewards) > 0)
     writer.add_scalar(writer_tag + "/n_positive_actions", n_positive_actions, steps_done)
-    writer.add_scalar(writer_tag + "/total_reward", total_reward, steps_done)
+    writer.add_scalar("total_reward", total_reward, steps_done) if is_training else ''
+    writer.add_scalar(writer_tag + "/total_reward", total_reward, steps_done) if not is_training else ''
     # writer.add_text(writer_tag + "/deception_tracker", str({k: v.trigger_times for k, v in observation['_deception_tracker'].items()}), steps_done)
     for k, v in observation['_deception_tracker'].items():
         writer.add_scalar(writer_tag + "/detection_points_trigger_counter/" + k, len(v.trigger_times), steps_done)
@@ -124,6 +133,11 @@ def write_to_summary(writer, all_rewards, epsilon, loss_string, observation, ite
     # triggers = [v.trigger_times for _, v in observation['_deception_tracker'].items()]
     # writer.add_histogram(writer_tag + "/detection_points_trigger_steps",
     #                      np.concatenate(triggers), steps_done, bins=iteration_count) if len(triggers) and len(np.concatenate(triggers)) else ''
+    if is_training:
+        writer.add_scalar("run_mean", run_mean, steps_done)
+    else:
+        writer.add_scalar("eval_run_mean", run_mean, steps_done)
+
     writer.flush()
 
 
@@ -281,7 +295,6 @@ def evaluate_model(
 
         loss_string = learner.loss_as_string()
 
-        write_to_summary(writer, np.array(all_rewards), epsilon, loss_string, observation, iteration_count, training_steps_done + steps_done, writer_tag="evaluation")
         if configuration.log_results:
             for name, deception_tracker in observation['_deception_tracker'].items():
                 detection_points_results[name] = detection_points_results.get(name, [[], [0], []])
@@ -321,6 +334,8 @@ def evaluate_model(
                 learner.save(save_model_filename.replace('.tar', f'_eval_steps{training_steps_done + steps_done}.tar'))
                 learner.save(save_model_filename.replace('.tar', '_eval_best.tar'))
 
+        write_to_summary(writer, np.array(all_rewards), epsilon, loss_string, observation, iteration_count, best_eval_running_mean,
+                         training_steps_done + steps_done, writer_tag="evaluation")
         length = episode_ended_at if episode_ended_at else iteration_count
         learner.end_of_episode(i_episode=i_episode, t=length)
         # if render:
@@ -356,6 +371,7 @@ def epsilon_greedy_search(
     eval_episode_count: Optional[int] = 0,
     eval_freq: Optional[int] = 5,
     mean_reward_window=10,
+    seed=0,
     render=False,
     render_last_episode_rewards_to: Optional[str] = None,
     verbosity: Verbosity = Verbosity.Normal,
@@ -411,6 +427,11 @@ def epsilon_greedy_search(
 
     """
 
+    # set seeding
+    torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+
     writer = configuration.writer
 
     print(f"###### {title}\n"
@@ -423,6 +444,37 @@ def epsilon_greedy_search(
           f"{learner.parameters_as_string()}")
 
     initial_epsilon = epsilon
+
+    hparams_dict = {"gymid": cyberbattle_gym_env.unwrapped.spec.id,  # env.envs[0].unwrapped.spec.id
+                    "date": os.path.normpath(configuration.log_dir).split(os.path.sep)[-1],
+                    "agent": learner.name(),  # title: str,
+                    "episode_count": episode_count,
+                    "iteration_count": iteration_count,
+                    "epsilon_minimum": epsilon_minimum,
+                    "mean_reward_window": mean_reward_window,
+                    "eval_freq": eval_freq,
+                    "eval_episode_count": eval_episode_count,
+                    "epsilon_exponential_decay": epsilon_exponential_decay,
+                    "train_while_exploit": 0}
+
+    # print(learner.parameters_as_string().replace("γ", "gamma").replace("replaymemory", "replay_memory_size").replace(" ", "").replace("\n", "").split(","))
+
+    hparams_dict.update({param_val.split("=")[0]: float(param_val.split("=")[1]) if float(param_val.split("=")[1]) != round(float(param_val.split("=")[1])) else int(param_val.split("=")[1])
+                         for param_val in learner.parameters_as_string().replace("γ",
+                                                                                 "gamma").replace("replaymemory",
+                                                                                                  "replay_memory_size").replace("\n", "").replace(" ", "").split(",")})
+    hparam_domain_discrete = {"gamma": [0.015, 0.25, 0.5, 0.8], "train_while_exploit": [0, 1], "reward_clip": [0, 1]}
+
+    exp, ssi, sei = hparams(hparams_dict,
+                            metric_dict={"run_mean": -3000,
+                                         "eval_run_mean": -3000,
+                                         "loss": sys.float_info.max,
+                                         "total_reward": -3000,
+                                         },
+                            hparam_domain_discrete=hparam_domain_discrete)
+    writer.file_writer.add_summary(exp)
+    writer.file_writer.add_summary(ssi)
+    writer.file_writer.add_summary(sei)
 
     all_episodes_rewards = []
     all_episodes_sum_rewards = []
@@ -570,8 +622,6 @@ def epsilon_greedy_search(
         logger.info(str(bar._format_line()))
 
         loss_string = learner.loss_as_string()
-        if not only_eval_summary:
-            write_to_summary(writer, np.array(all_rewards), epsilon, loss_string, observation, iteration_count, steps_done)
 
         if configuration.log_results:
             for name, deception_tracker in observation['_deception_tracker'].items():
@@ -620,6 +670,10 @@ def epsilon_greedy_search(
             if save_model_filename:
                 learner.save(save_model_filename.replace('.tar', f'_steps{steps_done}.tar'))
                 learner.save(save_model_filename.replace('.tar', '_best.tar'))
+
+        if not only_eval_summary:
+            write_to_summary(writer, np.array(all_rewards), epsilon, loss_string, observation, iteration_count, best_running_mean,
+                             steps_done)
 
         length = episode_ended_at if episode_ended_at else iteration_count
         learner.end_of_episode(i_episode=i_episode, t=length)

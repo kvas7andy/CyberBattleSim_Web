@@ -269,7 +269,7 @@ class DeepQLearnerPolicy(Learner):
 
     def parameters_as_string(self):
         return f'γ={self.gamma}, lr={self.learning_rate}, replaymemory={self.memory.capacity},\n' \
-               f'batch={self.batch_size}, target_update={self.target_update}'
+               f'batch={self.batch_size}, target_update={self.target_update}, reward_clip={1 if self.reward_clip else 0}'
 
     def all_parameters_as_string(self) -> str:
         model = self.stateaction_model
