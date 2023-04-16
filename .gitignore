@@ -56,6 +56,9 @@ sftp*-config.json
 /venv/**
 /.cache/**
 logs_dgx/*
+*.data
+*.data.yml
+*.crl
 
 /.dmypy.json
 src/.dmypy.json
