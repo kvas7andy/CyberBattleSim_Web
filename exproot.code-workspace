@@ -58,7 +58,8 @@
 			".pytest_cache/**": true,
 			".vscode-server/**": true,
 			"**/.git": false,
-			"typings/**": true
+			"typings/**": true,
+			".gnupg/**": true,
 		},
 		"files.trimFinalNewlines": true,
 		"github-enterprise.uri": "github.wdf.sap.corp"

@@ -139,7 +139,9 @@ def reconfigure_environment(ht_on: dict) -> None:
                     precondition=m.Precondition("username.NoAuth&username_password_restrictions"),
                     type=VulnerabilityType.REMOTE,
                     outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="DP_sqlinjectusername"),
-                    reward_string="SQL injeciton attack on login field: Invalid Credentials",
+                    reward_string="""Response: Invalid query: You have an error in your SQL syntax;
+                    check the manual that corresponds to your MySQL server version for the right syntax to use near '' at line 1""",
+                    # "SQL injeciton attack on login field: Invalid Credentials"
                 )),
             ])),
 
