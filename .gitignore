@@ -42,6 +42,8 @@ sftp*-config.json
 
 # vscode
 .ropeproject
+.vscode-server/
+.vscode/
 
 # pycharm
 .idea
@@ -90,5 +92,5 @@ notebooks/images/**
 .python_history
 .bash_history
 .ssh/
-.vscode-server/
+.dotnet/
 #.vscode/extension-mover-5-false10-2022.sh

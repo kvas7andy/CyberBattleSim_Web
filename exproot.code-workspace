@@ -44,6 +44,10 @@
 			"**/.github/**": true,
 			"**/.pytest_cache/**": true,
 			"**/.cache/**": true,
+			".dotnet/**": true,
+			".ssh/**": true,
+			".git/**": true,
+			".vscode/**": true,
 			"loonshot_sim.egg-info": true
 		},
 		"files.exclude": {
@@ -60,6 +64,10 @@
 			"**/.git": false,
 			"typings/**": true,
 			".gnupg/**": true,
+			".dotnet/**": true,
+			".ssh/**": true,
+			".git/**": true,
+			".vscode/**": true
 		},
 		"files.trimFinalNewlines": true,
 		"github-enterprise.uri": "github.wdf.sap.corp"

@@ -22,12 +22,12 @@ done
 #       # Concatenate the environment string with the pair of numbers
 #       final_str_list+=("$env_str$i$j")
 
-for i in {1..3}; do
+for i in {1..2}; do
     for gymid in "${final_str_list[@]}"; do
         # for reward in "-p reward_clip True" ""; do
         #     for gamma in "-p gamma 0.25" ""; do
         cat $INPUT_DIR/notebook_dql_debug_with_tinymicro.py | jupytext --to ipynb --set-kernel - |
-        papermill $OUTPUT_DIR/notebook_dql_debug_tiny_auto.ipynb -p gymid "$gymid" -p training_episode_count 2000 $reward $gamma
+        papermill $OUTPUT_DIR/notebook_dql_debug_tiny_auto.ipynb -p gymid "$gymid" -p seed $i -p training_episode_count 2000 $reward $gamma
         #     done
         # done
     done
