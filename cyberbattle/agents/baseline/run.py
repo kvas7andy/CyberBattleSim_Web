@@ -72,6 +72,9 @@ parser.add_argument('--eps_exp_decay', default=2000, type=int,
 parser.add_argument('--reward_clip', action='store_true', help='Apply reward clipping to [-1, 1]')
 parser.set_defaults(reward_clip=False)
 
+parser.add_argument('--gamma', default=0.015, type=float,
+                    help='gamma hyperparameter value for RL algorithms (default: 0.015)')
+
 parser.add_argument('--seed', default=time.time(), type=int,
                     help='special seeding (random with current CPU time in sec by default)')
 

@@ -74,7 +74,7 @@ exploit_train = "exploittrain" * train_while_exploit + "exploitinfer" * (1 - tra
 def main(gymid=gymid, training_episode_count=training_episode_count,
          eval_episode_count=eval_episode_count, iteration_count=iteration_count,
          epsilon_exponential_decay=epsilon_exponential_decay, seed=seed,
-         reward_clip=reward_clip, args=None):
+         reward_clip=reward_clip, gamma=gamma, args=None):
     if args is not None:
         training_episode_count = args.training_episode_count
         eval_episode_count = args.eval_episode_count
@@ -83,6 +83,7 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
         reward_clip = args.reward_clip
         epsilon_exponential_decay = args.eps_exp_decay
         seed = args.seed
+        gamma = args.gamma
 
     if not seed:
         seed = time.time()
@@ -94,6 +95,7 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
 
     os.environ["GYMID"] = str(gymid)
     os.environ['SEED'] = str(seed)
+    os.environ['GAMMA'] = str(gamma)
     os.environ['REWARD_CLIP'] = str(log_results).lower()
 
     log_dir = '/logs/exper/' + "notebook_dql_debug_with_tinymicro"
