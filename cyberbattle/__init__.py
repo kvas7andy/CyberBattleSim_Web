@@ -107,21 +107,21 @@ register(
     max_episode_steps=50,
 )
 
-if 'CyberBattleTinyMicro-v12' in registry.env_specs:
-    del registry.env_specs['CyberBattleTinyMicro-v12']
+# if 'CyberBattleTinyMicro-v12' in registry.env_specs:
+#     del registry.env_specs['CyberBattleTinyMicro-v12']
 
-register(
-    id='CyberBattleTinyMicro-v12',
-    cyberbattle_env_identifiers=tinymicro_deception_ht12.ENV_IDENTIFIERS,
-    entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroHT12',
-    kwargs={'defender_agent': None,
-            'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
-            'defender_goal': DefenderGoal(eviction=True),
-            'maximum_total_credentials': 1,
-            'maximum_node_count': 10
-            },
-    max_episode_steps=50,
-)
+# register(
+#     id='CyberBattleTinyMicro-v12',
+#     cyberbattle_env_identifiers=tinymicro_deception_ht12.ENV_IDENTIFIERS,
+#     entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroHT12',
+#     kwargs={'defender_agent': None,
+#             'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
+#             'defender_goal': DefenderGoal(eviction=True),
+#             'maximum_total_credentials': 1,
+#             'maximum_node_count': 10
+#             },
+#     max_episode_steps=50,
+# )
 
 
 max_ht_on = len(ht_on)
@@ -133,7 +133,7 @@ for i in range(1, max_ht_on + 1):
             del registry.env_specs['CyberBattleTinyMicro-v' + ver]
 
         ht_on = dict(zip(list(ht_on.keys()),
-                         [True if k in [i, j] else False for k in range(max_ht_on + 1)]))
+                         [True if k in [i, j] else False for k in range(1, max_ht_on + 1)]))
         tinymicro_deception_constructor.reconfigure_environment(ht_on)
 
         register(
@@ -158,7 +158,7 @@ for i in range(1, max_ht_on + 1):
         del registry.env_specs['CyberBattleTinyMicro-v' + ver]
 
     ht_on = dict(zip(list(ht_on.keys()),
-                     [True if k != i else False for k in range(max_ht_on + 1)]))
+                     [True if k != i else False for k in range(1, max_ht_on + 1)]))
     tinymicro_deception_constructor.reconfigure_environment(ht_on)
 
     register(
