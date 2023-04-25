@@ -24,6 +24,7 @@ done
 
 for i in {1..2}; do
     for gymid in "${final_str_list[@]}"; do
+        echo 
         # for reward in "-p reward_clip True" ""; do
         #     for gamma in "-p gamma 0.25" ""; do
         cat $INPUT_DIR/notebook_dql_debug_with_tinymicro.py | jupytext --to ipynb --set-kernel - |
