@@ -6,7 +6,7 @@ REWARD_CLIP=True
 # cat $INPUT_DIR/notebook_debug_tinymicro.py|jupytext −−to ipynb −−set−kernel −| papermill $OUTPUT_DIR/notebook_dql_debug_tiny_ht_one_by_one.ipynb -p gymid 'CyberBattleTinyMicro-v1' -p training_episode_count  2000  # --log-output --log-level INFO --progress-bar  -p iteration_count 20 -p eval_episode_count 10
 env_str='CyberBattleTinyMicro-v'
 # Define the version string pairs
-ver_pairs=('1' '2' '3' '4' '12' '13' '14' '23' '24' '34' '123' '124' '134' '234' '1234') #
+ver_pairs=('12' '13' '14' '23' '24' '34' '123' '124' '134' '234' '1234' '1' '2' '3' '4' ) #
 # Create an empty array for the final string list
 final_str_list=()
 
