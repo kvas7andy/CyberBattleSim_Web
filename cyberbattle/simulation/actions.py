@@ -233,13 +233,13 @@ class AgentActions:
         target_node_data: model.NodeInfo = self._environment.get_node(target)
 
         global_vuln: Set[model.VulnerabilityID] = set.union(*([
-            model.vuln_id_from_vuln(None, vuln_id, vulnerability)
+            model.vuln_name_from_vuln(None, vuln_id, vulnerability)
             for vuln_id, vulnerability in self._environment.vulnerability_library.items()
             if (type_filter is None or vulnerability.type == type_filter)] + [set()])
         )
 
         local_vuln = set.union(*([
-            model.vuln_id_from_vuln(None, vuln_id, vulnerability)
+            model.vuln_name_from_vuln(None, vuln_id, vulnerability)
             for vuln_id, vulnerability in target_node_data.vulnerabilities.items()
             if (type_filter is None or vulnerability.type == type_filter)] + [set()])
         )

@@ -565,7 +565,7 @@ def collect_detection_point_names(nodes: Iterator[Tuple[NodeID, NodeInfo]],
     })))
 
 
-def vuln_id_from_vuln(node_id: NodeID, id: VulnerabilityID, vuln_info: VulnerabilityInfo) -> Set:
+def vuln_name_from_vuln(node_id: NodeID, id: VulnerabilityID, vuln_info: VulnerabilityInfo) -> Set:
     if isinstance(vuln_info.precondition, list):
         return {":".join([str(node_id), str(precondition.expression), str(id)]) if node_id else
                 ":".join([str(precondition.expression), str(id)])
@@ -583,11 +583,11 @@ def collect_vulnerability_ids_from_nodes_bytype(
     that are referenced in a given set of nodes and vulnerability library
     """
     return sorted(list(set.union(*(
-        vuln_id_from_vuln(node_id, id, v)
+        vuln_name_from_vuln(node_id, id, v)
         for node_id, node_info in nodes
         for id, v in node_info.vulnerabilities.items()
         if v.type == type)).union(*(
-            vuln_id_from_vuln(node_id, id, v)
+            vuln_name_from_vuln(node_id, id, v)
             for node_id, _ in nodes
             for id, v in global_vulnerabilities.items()
             if v.type == type)
