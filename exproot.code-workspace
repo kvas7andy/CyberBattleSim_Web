@@ -70,6 +70,9 @@
 			".vscode/**": true
 		},
 		"files.trimFinalNewlines": true,
-		"github-enterprise.uri": "github.wdf.sap.corp"
+		"github-enterprise.uri": "github.wdf.sap.corp",
+		"editor.fontFamily": "Menlo, Monaco, 'Courier New', monospace",
+		"git.postCommitCommand": "push",
+		"git.rememberPostCommitCommand": true
 	}
 }
