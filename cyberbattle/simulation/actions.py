@@ -262,17 +262,20 @@ class AgentActions:
     def get_discovered_properties(self, node_id: model.NodeID) -> Set[int]:
         return self._discovered_nodes[node_id].discovered_properties
 
-    def __mark_node_as_discovered(self, node_id: model.NodeID, propagate: bool = True) -> bool:
+    def __mark_node_as_discovered(self, node_id: model.NodeID, propagate: bool = True) -> int:
         newly_discovered = node_id not in self._discovered_nodes
+        newly_discovered_properties = 0
 
+        only_global_properties = set(list(self._discovered_nodes.items())[0][1].discovered_properties).intersection(self._environment.identifiers.global_properties)  # self._discovered_nodes and
+        node_info = self._environment.get_node(node_id)
+        only_initial_properties = set(node_info.properties).intersection(self._environment.identifiers.initial_properties)
         if propagate and newly_discovered:
             logger.info('discovered node: ' + node_id)
             self._discovered_nodes[node_id] = NodeTrackingInformation()
-            only_global_properties = self._discovered_nodes and set(list(self._discovered_nodes.items())[0][1].discovered_properties).intersection(self._environment.identifiers.global_properties)
-            self.__mark_nodeproperties_as_discovered(node_id, only_global_properties, propagate=propagate)
-        return newly_discovered
+        newly_discovered_properties = self.__mark_nodeproperties_as_discovered(node_id, only_global_properties.union(only_initial_properties), propagate=propagate)
+        return newly_discovered_properties
 
-    def __mark_nodeproperties_as_discovered(self, node_id: model.NodeID, properties: List[PropertyName], propagate: bool = True):
+    def __mark_nodeproperties_as_discovered(self, node_id: model.NodeID, properties: List[PropertyName], propagate: bool = True) -> int:
 
         # node_info = self._environment.get_node(node_id)
 
@@ -325,20 +328,23 @@ class AgentActions:
         return last_owned_at, is_currently_owned
 
     def __mark_discovered_entities(self, reference_node: model.NodeID, outcome: model.VulnerabilityOutcome,
-                                   propagate: bool = True) -> Tuple[int, float, int]:
+                                   propagate: bool = True) -> Tuple[int, int, int, int, int, bool]:
         """Mark discovered entities as such and return
         the number of newly discovered nodes, their total value and the number of newly discovered credentials"""
         newly_discovered_nodes = 0
         newly_discovered_nodes_value = 0
         newly_discovered_credentials = 0
         newly_discovered_profiles = 0
+        newly_discovered_properties = 0
         ip_local_change = False
 
         if isinstance(outcome, model.LeakedCredentials):
             for credential in outcome.credentials:
-                if self.__mark_node_as_discovered(credential.node):
+                new_properties = self.__mark_node_as_discovered(credential.node)
+                if new_properties:
                     newly_discovered_nodes += 1
                     newly_discovered_nodes_value += self._environment.get_node(credential.node).value
+                    newly_discovered_properties += new_properties
 
                 if credential.credential not in self._gathered_credentials:
                     newly_discovered_credentials += 1
@@ -351,9 +357,11 @@ class AgentActions:
 
         elif isinstance(outcome, model.LeakedNodesId):
             for node_id in outcome.discovered_nodes:
-                if self.__mark_node_as_discovered(node_id, propagate=propagate):
+                new_properties = self.__mark_node_as_discovered(node_id, propagate=propagate)
+                if new_properties:
                     newly_discovered_nodes += 1
                     newly_discovered_nodes_value += self._environment.get_node(node_id).value
+                    newly_discovered_properties += new_properties
 
                 if propagate:
                     self.__annotate_edge(reference_node, node_id, EdgeAnnotation.KNOWS)
@@ -389,7 +397,7 @@ class AgentActions:
                 if not (self.__ip_local or ip_local_change):
                     ip_local_change = "ip.local" in profile_str
 
-        return newly_discovered_nodes, newly_discovered_nodes_value, \
+        return newly_discovered_nodes, newly_discovered_nodes_value, newly_discovered_properties, \
             newly_discovered_credentials, newly_discovered_profiles, ip_local_change
 
     def get_node_privilegelevel(self, node_id: model.NodeID) -> model.PrivilegeLevel:
@@ -472,6 +480,7 @@ class AgentActions:
 
         precond_ind_outcome_str_iter = iter(zip(precondition, range(len(precondition)), outcome)) \
             if isinstance(precondition, list) else iter(zip([precondition], range(1), [outcome]))
+
         for precondition, precondition_index, outcome in precond_ind_outcome_str_iter:
             reward = -vulnerability.cost
 
@@ -547,6 +556,7 @@ class AgentActions:
             # Dummy update all entites, for reward evaluation
             newly_discovered_nodes, \
                 discovered_nodes_value, \
+                newly_discovered_properties, \
                 newly_discovered_credentials, \
                 newly_discovered_profiles, ip_local_change = self.__mark_discovered_entities(node_id, outcome, propagate=False)
 
@@ -557,10 +567,9 @@ class AgentActions:
                     assert p in node_info.properties or p in self._environment.identifiers.global_properties, \
                         f'Discovered property {p} must belong to the set of properties associated with the node or global properties.'
 
-                newly_discovered_properties = self.__mark_nodeproperties_as_discovered(node_id, outcome.discovered_properties, propagate=False)
+                newly_discovered_properties += self.__mark_nodeproperties_as_discovered(node_id, outcome.discovered_properties, propagate=False)
                 for discovered_node_id in self._discovered_nodes:
                     self.__mark_nodeproperties_as_discovered(discovered_node_id, only_global_properties, propagate=False)
-                reward += newly_discovered_properties * Reward.PROPERTY_DISCOVERED_REWARD
 
             # TOCHECK should be never true, as once we discover node_id, we should input it,
             # if target_node_id is not inside desicovered_nodes yet,
@@ -591,6 +600,7 @@ class AgentActions:
             reward += newly_discovered_nodes * Reward.NODE_DISCOVERED_REWARD
             reward += newly_discovered_credentials * Reward.CREDENTIAL_DISCOVERED_REWARD
             reward += newly_discovered_profiles * Reward.PROFILE_DISCOVERED_REWARD
+            reward += newly_discovered_properties * Reward.PROPERTY_DISCOVERED_REWARD
 
             if "ip.local" in str(precondition.expression) and ip_local_flag:
                 reward += Reward.SSRF
@@ -656,6 +666,7 @@ class AgentActions:
             # Update all entites
         newly_discovered_nodes, \
             discovered_nodes_value, \
+            newly_discovered_properties, \
             newly_discovered_credentials, \
             newly_discovered_profiles, ip_local_change = self.__mark_discovered_entities(node_id, max_outcome)
 
@@ -666,9 +677,9 @@ class AgentActions:
                 assert p in node_info.properties or p in self._environment.identifiers.global_properties, \
                     f'Discovered property {p} must belong to the set of properties associated with the node or global properties.'
 
+            newly_discovered_properties += self.__mark_nodeproperties_as_discovered(node_id, outcome.discovered_properties)
             for discovered_node_id in self._discovered_nodes:
                 self.__mark_nodeproperties_as_discovered(discovered_node_id, only_global_properties)
-            reward += newly_discovered_properties * Reward.PROPERTY_DISCOVERED_REWARD
 
         already_executed = False
         if node_id in self._discovered_nodes:
@@ -693,12 +704,13 @@ class AgentActions:
         reward += newly_discovered_nodes * Reward.NODE_DISCOVERED_REWARD
         reward += newly_discovered_credentials * Reward.CREDENTIAL_DISCOVERED_REWARD
         reward += newly_discovered_profiles * Reward.PROFILE_DISCOVERED_REWARD
+        reward += newly_discovered_properties * Reward.PROPERTY_DISCOVERED_REWARD
 
         if "ip.local" in str(max_precondition.expression) and ip_local_flag:
             reward += Reward.SSRF
             logger.info("Exploiting SSRF for access to endpoints through local network!")
 
-        assert reward == max_reward, f'{reward} and {max_reward}, action {node_id} {str(max_precondition.expression)} {str(max_outcome)}'
+        assert reward == max_reward, f'{reward} and {max_reward}, action {node_id} {str(max_precondition.expression)} {str(type(max_outcome))}'
 
         return True, ActionResult(reward=max_reward, outcome=max_outcome, profile=profile,
                                   precondition=max_precondition, reward_string=max_reward_string)
