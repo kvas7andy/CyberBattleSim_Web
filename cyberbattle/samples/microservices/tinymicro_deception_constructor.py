@@ -40,7 +40,8 @@ def reconfigure_environment(ht_on: dict) -> None:
         ))] * ht_on["HT1_v2tov1"]
     )
 
-    global_properties = ["username_password_restrictions"] + ht_on["HT3_state"] * ["state"] + ht_on["HT4_cloudactivedefense"] * ["property.cloudactivedefense"]  # HT3 state ## HT4 cloudactive defense
+    global_properties = (["username_password_restrictions"] +  # ["script_block"] +
+                         ht_on["HT3_state"] * ["state"] + ht_on["HT4_cloudactivedefense"] * ["property.cloudactivedefense"])  # HT3 state ## HT4 cloudactive defense
     initial_properties = ["property.git", "robots.txt", "thisdoesnotexist"]
 
     # Network nodes involved in the myMedcialPortal CTF

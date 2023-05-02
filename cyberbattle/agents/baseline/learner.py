@@ -445,36 +445,37 @@ def epsilon_greedy_search(
 
     initial_epsilon = epsilon
 
-    hparams_dict = {"gymid": cyberbattle_gym_env.unwrapped.spec.id,  # env.envs[0].unwrapped.spec.id
-                    "date": os.path.normpath(configuration.log_dir).split(os.path.sep)[-1],
-                    "agent": learner.name(),  # title: str,
-                    "episode_count": episode_count,
-                    "iteration_count": iteration_count,
-                    "epsilon_minimum": epsilon_minimum,
-                    "mean_reward_window": mean_reward_window,
-                    "eval_freq": eval_freq,
-                    "eval_episode_count": eval_episode_count,
-                    "epsilon_exponential_decay": epsilon_exponential_decay,
-                    "train_while_exploit": 0}
+    if configuration.log_results:
+        hparams_dict = {"gymid": cyberbattle_gym_env.unwrapped.spec.id,  # env.envs[0].unwrapped.spec.id
+                        "date": os.path.normpath(configuration.log_dir).split(os.path.sep)[-1],
+                        "agent": learner.name(),  # title: str,
+                        "episode_count": episode_count,
+                        "iteration_count": iteration_count,
+                        "epsilon_minimum": epsilon_minimum,
+                        "mean_reward_window": mean_reward_window,
+                        "eval_freq": eval_freq,
+                        "eval_episode_count": eval_episode_count,
+                        "epsilon_exponential_decay": epsilon_exponential_decay,
+                        "train_while_exploit": 0}
 
-    # print(learner.parameters_as_string().replace("γ", "gamma").replace("replaymemory", "replay_memory_size").replace(" ", "").replace("\n", "").split(","))
+        # print(learner.parameters_as_string().replace("γ", "gamma").replace("replaymemory", "replay_memory_size").replace(" ", "").replace("\n", "").split(","))
 
-    hparams_dict.update({param_val.split("=")[0]: float(param_val.split("=")[1]) if float(param_val.split("=")[1]) != round(float(param_val.split("=")[1])) else int(param_val.split("=")[1])
-                         for param_val in learner.parameters_as_string().replace("γ",
-                                                                                 "gamma").replace("replaymemory",
-                                                                                                  "replay_memory_size").replace("\n", "").replace(" ", "").split(",")})
-    hparam_domain_discrete = {"gamma": [0.015, 0.25, 0.5, 0.8], "train_while_exploit": [0, 1], "reward_clip": [0, 1]}
+        hparams_dict.update({param_val.split("=")[0]: float(param_val.split("=")[1]) if float(param_val.split("=")[1]) != round(float(param_val.split("=")[1])) else int(param_val.split("=")[1])
+                            for param_val in learner.parameters_as_string().replace("γ",
+                                                                                    "gamma").replace("replaymemory",
+                                                                                                     "replay_memory_size").replace("\n", "").replace(" ", "").split(",")})
+        hparam_domain_discrete = {"gamma": [0.015, 0.25, 0.5, 0.8], "train_while_exploit": [0, 1], "reward_clip": [0, 1]}
 
-    exp, ssi, sei = hparams(hparams_dict,
-                            metric_dict={"run_mean": -3000,
-                                         "eval_run_mean": -3000,
-                                         "loss": sys.float_info.max,
-                                         "total_reward": -3000,
-                                         },
-                            hparam_domain_discrete=hparam_domain_discrete)
-    writer.file_writer.add_summary(exp)
-    writer.file_writer.add_summary(ssi)
-    writer.file_writer.add_summary(sei)
+        exp, ssi, sei = hparams(hparams_dict,
+                                metric_dict={"run_mean": -3000,
+                                             "eval_run_mean": -3000,
+                                             "loss": sys.float_info.max,
+                                             "total_reward": -3000,
+                                             },
+                                hparam_domain_discrete=hparam_domain_discrete)
+        writer.file_writer.add_summary(exp)
+        writer.file_writer.add_summary(ssi)
+        writer.file_writer.add_summary(sei)
 
     all_episodes_rewards = []
     all_episodes_sum_rewards = []
