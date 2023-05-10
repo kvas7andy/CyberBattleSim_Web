@@ -415,7 +415,6 @@ class DeepQLearnerPolicy(Learner):
                 ) -> Tuple[str, cyberbattle_env.Action, object]:
         """Random exploration that avoids repeating actions previously taken in the same state"""
         # sample local and remote actions only (excludes connect action)
-        logger.info("Enter exploration phase instead of exploitation.")
         gym_action = wrapped_env.env.sample_valid_action(kinds=[0, 1, 2])
         metadata = self.metadata_from_gymaction(wrapped_env, gym_action)
         return "explore", gym_action, metadata

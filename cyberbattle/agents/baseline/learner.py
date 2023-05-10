@@ -561,9 +561,11 @@ def epsilon_greedy_search(
             x = np.random.rand()
             if x <= epsilon:
                 action_style, gym_action, action_metadata = learner.explore(wrapped_env)
+                logger.info("Choose exploration phase")
             else:
                 action_style, gym_action, action_metadata = learner.exploit(wrapped_env, observation)
                 if not gym_action:
+                    logger.info("Enter exploration phase instead of exploitation")
                     stats['exploit_deflected_to_explore'] += 1
                     _, gym_action, action_metadata = learner.explore(wrapped_env)
 
