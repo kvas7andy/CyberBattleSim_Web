@@ -124,7 +124,7 @@ register(
 # )
 
 
-max_ht_on = len(ht_on)
+max_ht_on = len(configuration.honeytokens_on)
 for i in range(1, max_ht_on + 1):
     for j in range(i + 1, max_ht_on + 1):
 
@@ -132,7 +132,7 @@ for i in range(1, max_ht_on + 1):
         if 'CyberBattleTinyMicro-v' + ver in registry.env_specs:
             del registry.env_specs['CyberBattleTinyMicro-v' + ver]
 
-        ht_on = dict(zip(list(ht_on.keys()),
+        ht_on = dict(zip(list(sorted(configuration.honeytokens_on.keys())),
                          [True if k in [i, j] else False for k in range(1, max_ht_on + 1)]))
         tinymicro_deception_constructor.reconfigure_environment(ht_on)
 
@@ -150,14 +150,13 @@ for i in range(1, max_ht_on + 1):
             max_episode_steps=50,
         )
 
-max_ht_on = len(ht_on)
 for i in range(1, max_ht_on + 1):
 
     ver = ''.join([str(k) for k in range(1, max_ht_on + 1) if k != i])
     if 'CyberBattleTinyMicro-v' + ver in registry.env_specs:
         del registry.env_specs['CyberBattleTinyMicro-v' + ver]
 
-    ht_on = dict(zip(list(ht_on.keys()),
+    ht_on = dict(zip(list(sorted(configuration.honeytokens_on.keys())),
                      [True if k != i else False for k in range(1, max_ht_on + 1)]))
     tinymicro_deception_constructor.reconfigure_environment(ht_on)
 

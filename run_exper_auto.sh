@@ -22,7 +22,7 @@ done
 #       # Concatenate the environment string with the pair of numbers
 #       final_str_list+=("$env_str$i$j")
 
-for i in {1..2}; do
+for i in 1 3 5; do
     for gymid in "${final_str_list[@]}"; do
         echo 
         # for reward in "-p reward_clip True" ""; do
