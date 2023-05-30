@@ -94,3 +94,4 @@ notebooks/images/**
 .ssh/
 .dotnet/
 #.vscode/extension-mover-5-false10-2022.sh
+.config/tensorboard/credentials/uploader-creds.json
