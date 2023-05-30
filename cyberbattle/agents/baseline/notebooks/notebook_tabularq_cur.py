@@ -41,7 +41,7 @@ import cyberbattle.agents.baseline.plotting as p
 import cyberbattle.agents.baseline.agent_wrapper as w
 import cyberbattle.agents.baseline.agent_tabularqlearning as a
 from cyberbattle.agents.baseline.agent_wrapper import Verbosity
-import cyberbattle.agents.baseline.learner as learner
+import cyberbattle.agents.baseline.learner as lwearner
 from cyberbattle._env.cyberbattle_env import AttackerGoal
 
 logging.basicConfig(stream=sys.stdout, level=logging.ERROR, format="%(levelname)s: %(message)s")
