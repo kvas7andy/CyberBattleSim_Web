@@ -24,7 +24,7 @@ def get_install_requires(requirements_txt) -> List[str]:
 
 # main setup kw args
 setup_kwargs = {
-    'name': 'loonshot-sim',
+    'name': 'cyberbattle',
     'version': '0.1',
     'description': "The simulation and RL code for the S+C loonshot project",
     'author': 'S+C Loonshot Team',

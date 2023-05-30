@@ -24,12 +24,12 @@ def reconfigure_environment(ht_on: dict) -> None:
     global_vulnerability_library = OrderedDict(
         [] +
         [("State=1", VulnerabilityInfo(  # HT3 state
-            description="Deceptive honeytoken with detection point",
+            description="Deceptive honeytoken with detection point; Honeytoken tampering (honeycookie)",
             # TODO: illegal from code perspective to use NOT with property => find soliution in cyberbattle_env._check_properties_after_profile_check prerequisuits &~script_block
             type=VulnerabilityType.REMOTE,
             precondition=m.Precondition("~username.NoAuth&state"),  # ~script_block
             outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(cost=10, detection_point_name="HT3_state"),
-            reward_string="Honeytoken tamepring: changing state value in cookies leads to no change",
+            reward_string="Honeytoken tampering: changing state value in cookies leads to no change",
         ))] * ht_on["HT3_state"] +
         [("V2toV1", VulnerabilityInfo(  # HT1 v2tov1
             description="Version change triggers deceptive token",

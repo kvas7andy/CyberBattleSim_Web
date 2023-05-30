@@ -5,6 +5,7 @@
 import math
 import sys
 import os
+import re
 
 from .plotting import PlotTraining, plot_averaged_cummulative_rewards
 from .agent_wrapper import AgentWrapper, EnvironmentBounds, Verbosity, ActionTrackingStateAugmentation
@@ -49,6 +50,18 @@ class Learner(abc.ABC):
     def on_step(self, wrapped_env: AgentWrapper, observation, reward, done, info, action_metadata) -> None:
         raise NotImplementedError
 
+    def train(self) -> None:
+        return
+
+    def eval(self) -> None:
+        return
+
+    def save(self, filename) -> None:
+        return
+
+    def load_best(self, filename) -> None:
+        return
+
     def parameters_as_string(self) -> str:
         return ''
 
@@ -75,7 +88,8 @@ class RandomPolicy(Learner):
         return "explore", gym_action, None
 
     def exploit(self, wrapped_env: AgentWrapper, observation) -> Tuple[str, Optional[cyberbattle_env.Action], object]:
-        raise NotImplementedError
+        gym_action = wrapped_env.env.sample_valid_action()
+        return "explore", gym_action, None
 
     def on_step(self, wrapped_env: AgentWrapper, observation, reward, done, info, action_metadata):
         return None
@@ -119,7 +133,7 @@ def write_to_summary(writer, all_rewards, epsilon, loss_string, observation, ite
     # TODO: make higher verbosity level
     # writer.add_histogram(writer_tag + "/rewards", all_rewards, steps_done)
     writer.add_scalar(writer_tag + "/epsilon", epsilon, steps_done) if is_training else ''
-    writer.add_scalar("loss", float(loss_string.split("=")[-1]), steps_done) if is_training and loss_string else ''
+    writer.add_scalar("loss", float(re.sub(r'[^a-zA-Z0-9]', '', loss_string.split("=")[-1])), steps_done) if is_training and loss_string else ''
 
     n_positive_actions = np.sum(np.array(all_rewards) > 0)
     writer.add_scalar(writer_tag + "/n_positive_actions", n_positive_actions, steps_done)
@@ -203,9 +217,7 @@ def evaluate_model(
     plot_title = f"{title} (epochs={eval_episode_count}, ϵ={initial_epsilon}" + learner.parameters_as_string()
 
     render_file_index = 1
-    train_while_exploit_before = learner.train_while_exploit
     learner.eval()
-    learner.train_while_exploit = False
 
     if configuration.log_results:
         detection_points_results = {}
@@ -334,8 +346,9 @@ def evaluate_model(
                 learner.save(save_model_filename.replace('.tar', f'_eval_steps{training_steps_done + steps_done}.tar'))
                 learner.save(save_model_filename.replace('.tar', '_eval_best.tar'))
 
-        write_to_summary(writer, np.array(all_rewards), epsilon, loss_string, observation, iteration_count, best_eval_running_mean,
-                         training_steps_done + steps_done, writer_tag="evaluation")
+        if configuration.log_results:
+            write_to_summary(writer, np.array(all_rewards), epsilon, loss_string, observation, iteration_count, best_eval_running_mean,
+                             training_steps_done + steps_done, writer_tag="evaluation")
         length = episode_ended_at if episode_ended_at else iteration_count
         learner.end_of_episode(i_episode=i_episode, t=length)
         # if render:
@@ -345,7 +358,6 @@ def evaluate_model(
     logger.info("evaluation ended\n") if configuration.log_results else None
 
     learner.train()
-    learner.train_while_exploit = train_while_exploit_before
 
     return TrainedLearner(
         all_episodes_rewards=all_episodes_rewards,
@@ -438,9 +450,9 @@ def epsilon_greedy_search(
           f"Learning with: episode_count={episode_count},"
           f"iteration_count={iteration_count},"
           f"ϵ={epsilon},"
-          f'ϵ_min={epsilon_minimum}, '
-          + (f"ϵ_multdecay={epsilon_multdecay}," if epsilon_multdecay else '')
-          + (f"ϵ_expdecay={epsilon_exponential_decay}," if epsilon_exponential_decay else '') +
+          f'ϵ_min={epsilon_minimum}, ' +
+          (f"ϵ_multdecay={epsilon_multdecay}," if epsilon_multdecay else '') +
+          (f"ϵ_expdecay={epsilon_exponential_decay}," if epsilon_exponential_decay else '') +
           f"{learner.parameters_as_string()}")
 
     initial_epsilon = epsilon
@@ -460,11 +472,19 @@ def epsilon_greedy_search(
 
         # print(learner.parameters_as_string().replace("γ", "gamma").replace("replaymemory", "replay_memory_size").replace(" ", "").replace("\n", "").split(","))
 
-        hparams_dict.update({param_val.split("=")[0]: float(param_val.split("=")[1]) if float(param_val.split("=")[1]) != round(float(param_val.split("=")[1])) else int(param_val.split("=")[1])
+        hparams_dict.update({param_val.split("=")[0]: float(param_val.split("=")[1]) if len(param_val.split("=")) > 1 and
+                             float(param_val.split("=")[1]) != round(float(param_val.split("=")[1])) else
+                             (int(param_val.split("=")[1]) if len(param_val.split("=")) > 1 else '')
                             for param_val in learner.parameters_as_string().replace("γ",
                                                                                     "gamma").replace("replaymemory",
                                                                                                      "replay_memory_size").replace("\n", "").replace(" ", "").split(",")})
-        hparam_domain_discrete = {"gamma": [0.015, 0.25, 0.5, 0.8], "train_while_exploit": [0, 1], "reward_clip": [0, 1]}
+        hparam_domain_discrete = {}
+        if 'gamma' in hparams_dict:
+            hparam_domain_discrete["gamma"] = [0.015, 0.25, 0.5, 0.8] if '' != hparams_dict.get('gamma', '') else ['']
+        if 'train_while_exploit' in hparams_dict:
+            hparam_domain_discrete["train_while_exploit"] = [0, 1] if '' != hparams_dict.get('train_while_exploit', '') else ['']
+        if 'reward_clip' in hparams_dict:
+            hparam_domain_discrete["reward_clip"] = [0, 1] if '' != hparams_dict.get('reward_clip', '') else ['']
 
         exp, ssi, sei = hparams(hparams_dict,
                                 metric_dict={"run_mean": -3000,
@@ -485,10 +505,10 @@ def epsilon_greedy_search(
                                ActionTrackingStateAugmentation(environment_properties, cyberbattle_gym_env.reset()))
     steps_done = 0
     i_episode = 0
-    plot_title = f"{title} (epochs={episode_count}, ϵ={initial_epsilon}, ϵ_min={epsilon_minimum}," \
-        + (f"ϵ_multdecay={epsilon_multdecay}," if epsilon_multdecay else '') \
-        + (f"ϵ_expdecay={epsilon_exponential_decay}," if epsilon_exponential_decay else '') \
-        + learner.parameters_as_string()
+    plot_title = (f"{title} (epochs={episode_count}, ϵ={initial_epsilon}, ϵ_min={epsilon_minimum}," +
+                  (f"ϵ_multdecay={epsilon_multdecay}," if epsilon_multdecay else '') +
+                  (f"ϵ_expdecay={epsilon_exponential_decay}," if epsilon_exponential_decay else '') +
+                  learner.parameters_as_string())
     plottraining = PlotTraining(title=plot_title, render_each_episode=render)
 
     render_file_index = 1
@@ -497,6 +517,8 @@ def epsilon_greedy_search(
     # detection_tracker_sparce_matrix = np.zer
 
     detection_points_results = {}
+
+    logger.info('episode_counts ' + str(episode_count))
 
     # for i_episode in range(1, episode_count + 1):
     while steps_done <= episode_count * iteration_count:
@@ -674,7 +696,7 @@ def epsilon_greedy_search(
                 learner.save(save_model_filename.replace('.tar', f'_steps{steps_done}.tar'))
                 learner.save(save_model_filename.replace('.tar', '_best.tar'))
 
-        if not only_eval_summary:
+        if configuration.log_results and not only_eval_summary:
             write_to_summary(writer, np.array(all_rewards), epsilon, loss_string, observation, iteration_count, best_running_mean,
                              steps_done)
 

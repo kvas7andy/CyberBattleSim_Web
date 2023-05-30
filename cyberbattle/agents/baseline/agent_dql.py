@@ -507,12 +507,17 @@ class DeepQLearnerPolicy(Learner):
     def eval(self):
         self.policy_net.eval()
         self.target_net.eval()
-        # self.train_while_exploit = False # TODO check if that is correct
+        self.prev_train_while_exploit = False
+        if self.train_while_exploit:
+            self.prev_train_while_exploit = True
+        self.train_while_exploit = False
 
     def train(self):
         self.policy_net.train()
         self.target_net.train()
-        # self.train_while_exploit = True # TODO check if that is correct
+        if hasattr(self, 'prev_train_while_exploit'):
+            self.train_while_exploit = self.prev_train_while_exploit
+            delattr(self, 'prev_train_while_exploit')
 
     def save(self, filename: str, optimizer_save=False) -> None:
         logger.info("Saving policy_net, target_net " + optimizer_save * "and optimizer " + "parameters")
@@ -554,7 +559,7 @@ class DeepQLearnerPolicy(Learner):
 
         self.load(os.path.join(logdir_training, filename_best_ckpt), optimizer_load=optimizer_load)
         logger.info(f"Load best model from {'evaluation'*evaluation_ckpt + 'training'*(not evaluation_ckpt)} " +
-                    " from file {os.path.join(logdir_training, filename_best_ckpt)}")
+                    f" from file {os.path.join(logdir_training, filename_best_ckpt)}")
 
     def loss_as_string(self) -> str:
         return str(getattr(self, 'loss').item()) if hasattr(self, 'loss') else ''

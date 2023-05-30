@@ -37,7 +37,8 @@ parser.add_argument('--no_train', dest='train', action='store_false', help='Run 
 parser.add_argument('--eval', action='store_true', help='Run evaluation code (DQL agent)')
 parser.add_argument('--eval_type', default='manual', help='Evaluation type of DQL agent')
 parser.add_argument('--log_results', action='store_true', help='Turn on logging of results to the file')
-parser.add_argument('--no-log_results', dest='log_results', action='store_false', help='do not reults to the file')
+parser.add_argument('--no_log_results', dest='log_results', action='store_false', help='do not reults to the file')
+parser.set_defaults(log_results=True)
 parser.set_defaults(train=True)
 parser.set_defaults(eval=False)
 
@@ -80,7 +81,11 @@ parser.add_argument('--seed', default=time.time(), type=int,
 
 parser.add_argument('--random_agent', dest='run_random_agent', action='store_true', help='run the random agent as a baseline for comparison')
 parser.add_argument('--no-random_agent', dest='run_random_agent', action='store_false', help='do not run the random agent as a baseline for comparison')
-parser.set_defaults(run_random_agent=True)
+parser.set_defaults(run_random_agent=False)
+
+parser.add_argument('--qtabular', dest='run_qtabular', action='store_true', help='run the q-tabular learning agent')
+parser.add_argument('--no-qtabular', dest='run_qtabular', action='store_false', help='do not run the q-tabular learning agent')
+parser.set_defaults(run_qtabular=False)
 
 args = parser.parse_args()
 

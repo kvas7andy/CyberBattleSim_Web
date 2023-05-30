@@ -28,8 +28,12 @@ the DQL agent and then run it one step at a time.
 import os
 from dotenv import load_dotenv, dotenv_values
 import pandas as pd
+import numpy as np
+import random
+import torch
 import datetime
 import time
+
 import cyberbattle.agents.baseline.learner as learner
 import cyberbattle.agents.baseline.agent_wrapper as w
 import cyberbattle.agents.baseline.agent_dql as dqla
@@ -84,10 +88,13 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
         epsilon_exponential_decay = args.eps_exp_decay
         seed = args.seed
         gamma = args.gamma
+        log_results = args.log_results
 
     if not seed:
         seed = time.time()
     seed = round(seed)
+
+    configuration.log_results = log_results
 
     iteration_count = max_episode_steps if iteration_count is None else iteration_count
     os.environ['TRAINING_EPISODE_COUNT'] = os.getenv('TRAINING_EPISODE_COUNT', 1000) if training_episode_count is None else str(training_episode_count)
@@ -99,6 +106,10 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
     os.environ['REWARD_CLIP'] = str(log_results).lower()
 
     log_dir = '/logs/exper/' + "notebook_dql_debug_with_tinymicro"
+    if args.run_random_agent:
+        log_dir = os.path.join(log_dir, 'random_agent')
+    elif args.run_qtabular:
+        log_dir = os.path.join(log_dir, 'qtabular')
     # convert the datetime object to string of specific format
     datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     log_dir = os.path.join(log_dir, gymid, datetime_str)
@@ -146,51 +157,80 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
                                                       max([int(value) for _, value in vars(Reward).items() if isinstance(value, int) or isinstance(value, float)]))
     if reward_clip:
         logger.info("Make a reward_clipping to [-1, 1]")
-    dqn_learning_run = learner.epsilon_greedy_search(
-        cyberbattle_gym_env=ctf_env,
-        environment_properties=ep,
-        learner=dqla.DeepQLearnerPolicy(
-            ep=ep,
-            gamma=gamma,
-            replay_memory_size=10000,
-            target_update=5,
-            batch_size=512,  # TODO increase?
-            learning_rate=learning_rate,  # torch default learning rate is 1e-2
-            train_while_exploit=train_while_exploit,
-            reward_clip=reward_clip_tuple
-        ),
-        episode_count=training_episode_count,
-        iteration_count=iteration_count,
-        epsilon=0.90,
-        epsilon_exponential_decay=epsilon_exponential_decay,
-        epsilon_minimum=0.10,
-        eval_episode_count=eval_episode_count,
-        eval_freq=eval_freq,
-        mean_reward_window=mean_reward_window,
-        seed=seed,
-        verbosity=Verbosity.Quiet,
-        render=False,
-        render_last_episode_rewards_to=os.path.join(log_dir, 'training') if log_results else None,
-        plot_episodes_length=False,
-        title="DQL",
-        only_eval_summary=only_eval_summary,
-        save_model_filename=log_results * os.path.join(log_dir, 'training',
-                                                       f"{exploit_train}_te{training_episode_count}.tar")
-    )
 
-    if log_results:
-        configuration.writer.close()
+    if args.run_random_agent:
+        random_run = learner.epsilon_greedy_search(
+            cyberbattle_gym_env=ctf_env,
+            environment_properties=ep,
+            learner=learner.RandomPolicy(),
+            episode_count=training_episode_count,
+            iteration_count=iteration_count,
+            epsilon=1.0,  # purely random
+            render=False,
+            verbosity=Verbosity.Quiet,
+            title="Random search"
+        )
+        agent = random_run['learner']
+        N = len(random_run["all_episodes_rewards"])
+    elif args.qtabular:
+        random_run = learner.epsilon_greedy_search(
+            cyberbattle_gym_env=ctf_env,
+            environment_properties=ep,
+            learner=learner.RandomPolicy(),
+            episode_count=training_episode_count,
+            iteration_count=iteration_count,
+            epsilon=1.0,  # purely random
+            render=False,
+            verbosity=Verbosity.Quiet,
+            title="Random search"
+        )
+        agent = random_run['learner']
+        N = len(random_run["all_episodes_rewards"])
+    else:
+        dqn_learning_run = learner.epsilon_greedy_search(
+            cyberbattle_gym_env=ctf_env,
+            environment_properties=ep,
+            learner=dqla.DeepQLearnerPolicy(
+                ep=ep,
+                gamma=gamma,
+                replay_memory_size=10000,
+                target_update=5,
+                batch_size=512,  # TODO increase?
+                learning_rate=learning_rate,  # torch default learning rate is 1e-2
+                train_while_exploit=train_while_exploit,
+                reward_clip=reward_clip_tuple
+            ),
+            episode_count=training_episode_count,
+            iteration_count=iteration_count,
+            epsilon=0.90,
+            epsilon_exponential_decay=epsilon_exponential_decay,
+            epsilon_minimum=0.10,
+            eval_episode_count=eval_episode_count,
+            eval_freq=eval_freq,
+            mean_reward_window=mean_reward_window,
+            seed=seed,
+            verbosity=Verbosity.Quiet,
+            render=False,
+            render_last_episode_rewards_to=os.path.join(log_dir, 'training') if log_results else None,
+            plot_episodes_length=False,
+            title="DQL",
+            only_eval_summary=only_eval_summary,
+            save_model_filename=log_results * os.path.join(log_dir, 'training',
+                                                           f"{exploit_train}_te{training_episode_count}.tar")
+        )
+        agent = dqn_learning_run['learner']
+        N = len(dqn_learning_run["all_episodes_rewards"])
     # # %%
     # initialize the environment
 
     # current_o = ctf_env_2.reset()
     # wrapped_env = AgentWrapper(ctf_env_2, ActionTrackingStateAugmentation(ep, current_o))
-    dql_agent = dqn_learning_run['learner']
+
     logger.setLevel(logging.INFO) if log_results else ''
 
     if log_results:
         logger.info("Saving model to directory " + log_dir)
-        dql_agent.save(os.path.join(log_dir, f"{exploit_train}_te{training_episode_count}_final.tar"))
+        agent.save(os.path.join(log_dir, f"{exploit_train}_te{training_episode_count}_final.tar"))
 
     logger.info("")
     logger.info("Now evaluate trained network")
@@ -199,15 +239,22 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
 
     max_steps = iteration_count
     # verbosity = Verbosity.Normal
-    dql_agent.load_best(os.path.join(log_dir, 'training'))
-    dql_agent.train_while_exploit = train_while_exploit
-    dql_agent.policy_net.eval()
+    agent.load_best(os.path.join(log_dir, 'training'))
+    agent.train_while_exploit = train_while_exploit
+    agent.eval()
 
     current_o = ctf_env.reset()
     wrapped_env = AgentWrapper(ctf_env, ActionTrackingStateAugmentation(ep, current_o))
     # # %%
     # Evaluate DQL agent 10 times
+    eval_h = []
     for n_trial in range(10):
+        seed = time.time_ns()
+        # set seeding
+        torch.manual_seed(np.uint(seed))
+        random.seed(seed)
+        np.random.seed(np.uint32(seed))
+
         # next action suggested by DQL agent
         h = []
         done = False
@@ -219,7 +266,7 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
             if done:
                 break
             # run the suggested action
-            action_style, next_action, _ = dql_agent.exploit(wrapped_env, current_o)
+            action_style, next_action, _ = agent.exploit(wrapped_env, current_o)
 
             if next_action is None:
                 logger.info(f"Inference ended with error: next action == None, returned with aciton_style {action_style}")
@@ -231,10 +278,12 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
                       reward, total_reward,
                       action_str, action_style, info['precondition_str'], info['profile_str'], info["reward_string"]))  # "\t action  validity: " +
 
-            df = pd.DataFrame(h, columns=["Step", "Reward", "Cumulative Reward", "Next action", "Processed by", "Precondition", "Profile", "Reward string"])
-            df.set_index("Step", inplace=True)
-            if log_results:
-                df.to_csv(os.path.join(log_dir, f'{exploit_train}_evaln{n_trial}_te{training_episode_count}_actions.csv'))
+        eval_h += [h]
+        df = pd.DataFrame(h, columns=["Step", "Reward", "Cumulative Reward", "Next action", "Processed by", "Precondition", "Profile", "Reward string"])
+        df.set_index("Step", inplace=True)
+        if log_results:
+            df.to_csv(os.path.join(log_dir, f'{exploit_train}_evaln{n_trial}_te{training_episode_count}_actions.csv'))
+            configuration.writer.add_scalar("evaluation" + "/10trials_total_reward", eval_h[-1][-1][2], N + n_trial)
 
         print(f'len: {len(h)}, total reward: {total_reward}')
         pd.set_option("max_colwidth", 10**3)
@@ -244,6 +293,13 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
         # if not log_results else 'human'w
         wrapped_env.render(mode='rgb_array', filename=None if not log_results else
                            os.path.join(log_dir, f'{exploit_train}_evaln{n_trial}_te{training_episode_count}_network.png'))
+
+    if log_results:
+        for step in range(1, max_steps + 1):
+            step_rewards = np.array([val[step][2] for val in eval_h if len(val) > step])
+            configuration.writer.add_histogram("10trials_step_reward", step_rewards, step, bins="auto") if step_rewards.size else ''
+
+        configuration.writer.close()
 
 
 # %%
