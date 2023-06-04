@@ -190,6 +190,7 @@ def evaluate_model(
     eval_episode_count: int,
     best_eval_running_mean: float,
     training_steps_done: int = 0,
+    training_episode_done: int = 0,
     mean_reward_window: int = 10,
     render=True,
     render_last_episode_rewards_to: Optional[str] = None,
@@ -200,6 +201,7 @@ def evaluate_model(
 
     print(f"###### {title}\n"
           f"Evaluating with: eval_episode_count={eval_episode_count},"
+          f"training_episode_done={training_episode_done}",
           f"iteration_count={iteration_count},"
           f"ϵ={epsilon},"
           f"{learner.parameters_as_string()}")
@@ -307,7 +309,7 @@ def evaluate_model(
 
         loss_string = learner.loss_as_string()
 
-        if configuration.log_results:
+        if configuration.log_results and (training_episode_done % 100 < 50):
             for name, deception_tracker in observation['_deception_tracker'].items():
                 detection_points_results[name] = detection_points_results.get(name, [[], [0], []])
                 _, name_indptr, _ = detection_points_results[name]
@@ -335,16 +337,16 @@ def evaluate_model(
             logger.info(f"New best running mean (eval): {mean_over_window}")
             best_eval_running_mean = mean_over_window
 
-            if configuration.log_results:
-                np.savez(os.path.join(configuration.log_dir, 'training',
-                                      f'detection_points_results_eval_trainsteps{training_steps_done}.npz'),
-                         **({name + '_indices': np.array(v[0]) for name, v in detection_points_results.items()} |
-                            {name + '_indptr': np.array(v[1]) for name, v in detection_points_results.items()} |
-                            {name + '_eplength': np.array(v[2]) for name, v in detection_points_results.items()}))
-
             if save_model_filename:
                 learner.save(save_model_filename.replace('.tar', f'_eval_steps{training_steps_done + steps_done}.tar'))
                 learner.save(save_model_filename.replace('.tar', '_eval_best.tar'))
+
+        if configuration.log_results and (training_episode_done % 100 < 50):
+            np.savez(os.path.join(configuration.log_dir, 'training',
+                                  f'detection_points_results_eval_trainsteps{training_steps_done}.npz'),
+                     **({name + '_indices': np.array(v[0]) for name, v in detection_points_results.items()} |
+                        {name + '_indptr': np.array(v[1]) for name, v in detection_points_results.items()} |
+                        {name + '_eplength': np.array(v[2]) for name, v in detection_points_results.items()}))
 
         if configuration.log_results:
             write_to_summary(writer, np.array(all_rewards), epsilon, loss_string, observation, iteration_count, best_eval_running_mean,
@@ -669,9 +671,10 @@ def epsilon_greedy_search(
 
         # Evaluate model
         if not i_episode % eval_freq:
-            logger.info(f"Evaluate network on step {steps_done}")
+            logger.info(f"Evaluate network on episode {i_episode} step {steps_done}")
             trained_learner_results = evaluate_model(cyberbattle_gym_env, environment_properties, learner, title, iteration_count, epsilon,
-                                                     eval_episode_count, best_eval_running_mean, training_steps_done=steps_done, render=True, mean_reward_window=mean_reward_window,
+                                                     eval_episode_count, best_eval_running_mean, training_steps_done=steps_done, training_episode_done=i_episode,
+                                                     render=True, mean_reward_window=mean_reward_window,
                                                      render_last_episode_rewards_to=None,
                                                      verbosity=Verbosity.Quiet, save_model_filename=save_model_filename)
             best_eval_running_mean = trained_learner_results['best_running_mean']
@@ -684,13 +687,6 @@ def epsilon_greedy_search(
         if best_running_mean < mean_over_window:
             logger.info(f"New best running mean (eval): {mean_over_window}")
             best_running_mean = mean_over_window
-
-            if configuration.log_results:
-                np.savez(os.path.join(configuration.log_dir, 'training',
-                                      'detection_points_results.npz'),
-                         **({name + '_indices': np.array(v[0]) for name, v in detection_points_results.items()} |
-                            {name + '_indptr': np.array(v[1]) for name, v in detection_points_results.items()} |
-                            {name + '_eplength': np.array(v[2]) for name, v in detection_points_results.items()}))
 
             if save_model_filename:
                 learner.save(save_model_filename.replace('.tar', f'_steps{steps_done}.tar'))
@@ -709,6 +705,22 @@ def epsilon_greedy_search(
 
         if epsilon_multdecay:
             epsilon = max(epsilon_minimum, epsilon * epsilon_multdecay)
+
+        if (not i_episode % (5 * eval_freq)) and configuration.log_results:
+            np.savez(os.path.join(configuration.log_dir, 'training', f'detection_points_results_e{i_episode}.npz'),
+                     **({name + '_indices': np.array(v[0]) for name, v in detection_points_results.items()} |
+                        {name + '_indptr': np.array(v[1]) for name, v in detection_points_results.items()} |
+                        {name + '_eplength': np.array(v[2]) for name, v in detection_points_results.items()}))
+
+    if configuration.log_results:
+        np.savez(os.path.join(configuration.log_dir, 'training', f'detection_points_results_e{i_episode}.npz'),
+                 **({name + '_indices': np.array(v[0]) for name, v in detection_points_results.items()} |
+                    {name + '_indptr': np.array(v[1]) for name, v in detection_points_results.items()} |
+                    {name + '_eplength': np.array(v[2]) for name, v in detection_points_results.items()}))
+        np.savez(os.path.join(configuration.log_dir, 'training', 'detection_points_results.npz'),
+                 **({name + '_indices': np.array(v[0]) for name, v in detection_points_results.items()} |
+                    {name + '_indptr': np.array(v[1]) for name, v in detection_points_results.items()} |
+                    {name + '_eplength': np.array(v[2]) for name, v in detection_points_results.items()}))
 
     wrapped_env.close()
     logger.info("simulation ended\n") if configuration.log_results else None

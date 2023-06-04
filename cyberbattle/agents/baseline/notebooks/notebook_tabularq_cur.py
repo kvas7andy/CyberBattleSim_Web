@@ -28,6 +28,7 @@ traditional Jupyter Notebook to open in your browser
 # pylint: disable=invalid-name
 
 # %%
+from cyberbattle.simulation.config import configuration, logger
 import sys
 import logging
 from typing import cast
@@ -41,7 +42,7 @@ import cyberbattle.agents.baseline.plotting as p
 import cyberbattle.agents.baseline.agent_wrapper as w
 import cyberbattle.agents.baseline.agent_tabularqlearning as a
 from cyberbattle.agents.baseline.agent_wrapper import Verbosity
-import cyberbattle.agents.baseline.learner as lwearner
+import cyberbattle.agents.baseline.learner as learner
 from cyberbattle._env.cyberbattle_env import AttackerGoal
 
 logging.basicConfig(stream=sys.stdout, level=logging.ERROR, format="%(levelname)s: %(message)s")
@@ -103,7 +104,7 @@ def qlearning_run(gamma, gym_env):
         render=False,
         epsilon_multdecay=0.75,  # 0.999,
         epsilon_minimum=0.01,
-        eval_episode_count = eval_episode_count,
+        eval_episode_count=eval_episode_count,
         eval_freq=eval_freq,
         mean_reward_window=mean_reward_window,
         seed=seed,
@@ -119,7 +120,6 @@ qlearning_results = [qlearning_run(gamma, cyberbattlechain_10) for gamma in gamm
 qlearning_bestrun_10 = qlearning_results[0]
 
 # %%
-from cyberbattle.simulation.config import configuration, logger
 
 configuration.log_results
 

@@ -769,6 +769,7 @@ class CyberBattleEnv(gym.Env):
                     if node_vulnerable:
                         bitmask["local_vulnerability"][source_index, vulnerability_index] = 1
 
+                # Remote: all its remote vulnerabilities
                 for target_node_id in self.__discovered_nodes:
                     if source_node_id == target_node_id:
                         continue

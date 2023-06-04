@@ -36,6 +36,7 @@ import time
 
 import cyberbattle.agents.baseline.learner as learner
 import cyberbattle.agents.baseline.agent_wrapper as w
+import cyberbattle.agents.baseline.agent_tabularqlearning as a
 import cyberbattle.agents.baseline.agent_dql as dqla
 from cyberbattle.simulation.actions import Reward, Penalty
 import logging
@@ -78,7 +79,7 @@ exploit_train = "exploittrain" * train_while_exploit + "exploitinfer" * (1 - tra
 def main(gymid=gymid, training_episode_count=training_episode_count,
          eval_episode_count=eval_episode_count, iteration_count=iteration_count,
          epsilon_exponential_decay=epsilon_exponential_decay, seed=seed,
-         reward_clip=reward_clip, gamma=gamma, args=None):
+         reward_clip=reward_clip, gamma=gamma, log_results=log_results, args=None):
     if args is not None:
         training_episode_count = args.training_episode_count
         eval_episode_count = args.eval_episode_count
@@ -89,6 +90,11 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
         seed = args.seed
         gamma = args.gamma
         log_results = args.log_results
+        run_random_agent = args.run_random_agent
+        run_qtabular = args.run_qtabular
+    else:
+        run_random_agent = False
+        run_qtabular = False
 
     if not seed:
         seed = time.time()
@@ -106,9 +112,9 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
     os.environ['REWARD_CLIP'] = str(log_results).lower()
 
     log_dir = '/logs/exper/' + "notebook_dql_debug_with_tinymicro"
-    if args.run_random_agent:
+    if run_random_agent:
         log_dir = os.path.join(log_dir, 'random_agent')
-    elif args.run_qtabular:
+    elif run_qtabular:
         log_dir = os.path.join(log_dir, 'qtabular')
     # convert the datetime object to string of specific format
     datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -158,7 +164,7 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
     if reward_clip:
         logger.info("Make a reward_clipping to [-1, 1]")
 
-    if args.run_random_agent:
+    if run_random_agent:
         random_run = learner.epsilon_greedy_search(
             cyberbattle_gym_env=ctf_env,
             environment_properties=ep,
@@ -171,21 +177,21 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
             title="Random search"
         )
         agent = random_run['learner']
-        N = len(random_run["all_episodes_rewards"])
-    elif args.qtabular:
+        n_episodes = len(random_run["all_episodes_rewards"])
+    elif run_qtabular:
         random_run = learner.epsilon_greedy_search(
             cyberbattle_gym_env=ctf_env,
             environment_properties=ep,
-            learner=learner.RandomPolicy(),
+            learner=a.QTabularLearner(ep, gamma=gamma, learning_rate=0.90, exploit_percentile=100),
             episode_count=training_episode_count,
             iteration_count=iteration_count,
             epsilon=1.0,  # purely random
             render=False,
             verbosity=Verbosity.Quiet,
-            title="Random search"
+            title="Tabular Q-learning"
         )
         agent = random_run['learner']
-        N = len(random_run["all_episodes_rewards"])
+        n_episodes = len(random_run["all_episodes_rewards"])
     else:
         dqn_learning_run = learner.epsilon_greedy_search(
             cyberbattle_gym_env=ctf_env,
@@ -219,7 +225,7 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
                                                            f"{exploit_train}_te{training_episode_count}.tar")
         )
         agent = dqn_learning_run['learner']
-        N = len(dqn_learning_run["all_episodes_rewards"])
+        n_episodes = len(dqn_learning_run["all_episodes_rewards"])
     # # %%
     # initialize the environment
 
@@ -230,7 +236,7 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
 
     if log_results:
         logger.info("Saving model to directory " + log_dir)
-        agent.save(os.path.join(log_dir, f"{exploit_train}_te{training_episode_count}_final.tar"))
+        agent.save(os.path.join(log_dir, f"{exploit_train}_te{n_episodes}_final.tar"))
 
     logger.info("")
     logger.info("Now evaluate trained network")
@@ -283,7 +289,7 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
         df.set_index("Step", inplace=True)
         if log_results:
             df.to_csv(os.path.join(log_dir, f'{exploit_train}_evaln{n_trial}_te{training_episode_count}_actions.csv'))
-            configuration.writer.add_scalar("evaluation" + "/10trials_total_reward", eval_h[-1][-1][2], N + n_trial)
+            configuration.writer.add_scalar("evaluation" + "/10trials_total_reward", eval_h[-1][-1][2], n_episodes + n_trial)
 
         print(f'len: {len(h)}, total reward: {total_reward}')
         pd.set_option("max_colwidth", 10**3)
@@ -300,6 +306,7 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
             configuration.writer.add_histogram("10trials_step_reward", step_rewards, step, bins="auto") if step_rewards.size else ''
 
         configuration.writer.close()
+        logger.info("Ending of simulation!")
 
 
 # %%
