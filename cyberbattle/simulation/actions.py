@@ -500,7 +500,7 @@ class AgentActions:
                                            (ErrorType.NO_AUTH if profile.username == "NoAuth" else ErrorType.WRONG_AUTH))
                     need_doctor, need_chemist = precondition.need_roles()
                     max_precondition_index_list.append(precondition_index)
-                    max_reward_list.append(reward + failed_penalty)
+                    max_reward_list.append(reward + Penalty.FAILED_REMOTE_EXPLOIT)
                     max_outcome_list.append(model.ExploitFailed())
                 continue
 

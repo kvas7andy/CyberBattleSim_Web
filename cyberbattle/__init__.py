@@ -12,7 +12,7 @@ from .samples.chainpattern import chainpattern
 from .samples.toyctf import toy_ctf, tinytoy
 from .samples.microservices import tinymicro, tinymicro_deception_dp_only, tinymicro_deception_full, tinymicro_deception_constructor
 from .samples.microservices import tinymicro_deception_ht1, tinymicro_deception_ht2, tinymicro_deception_ht3, tinymicro_deception_ht4
-from .samples.microservices import tinymicro_deception_ht12, tinymicro_deception_ht123, tinymicro_deception_ht1234
+from .samples.microservices import tinymicro_deception_ht1234  # tinymicro_deception_ht12, tinymicro_deception_ht123,
 from .samples.active_directory import generate_ad
 from .simulation import generate_network, model
 from .simulation.config import configuration
@@ -174,15 +174,19 @@ for i in range(1, max_ht_on + 1):
         max_episode_steps=50,
     )
 
-
-if 'CyberBattleTinyMicro-v123' in registry.env_specs:
-    del registry.env_specs['CyberBattleTinyMicro-v123']
+if 'CyberBattleTinyMicro-v0' in registry.env_specs:
+    del registry.env_specs['CyberBattleTinyMicro-v0']
+4
+ht_on = dict(zip(list(sorted(configuration.honeytokens_on.keys())),
+                 [False for k in range(1, max_ht_on + 1)]))
+tinymicro_deception_constructor.reconfigure_environment(ht_on)
 
 register(
-    id='CyberBattleTinyMicro-v123',
-    cyberbattle_env_identifiers=tinymicro_deception_ht123.ENV_IDENTIFIERS,
-    entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroHT123',
-    kwargs={'defender_agent': None,
+    id='CyberBattleTinyMicro-v0',
+    cyberbattle_env_identifiers=tinymicro_deception_constructor.ENV_IDENTIFIERS,
+    entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroHT',
+    kwargs={'initial_environment': tinymicro_deception_constructor.new_environment(),
+            'defender_agent': None,
             'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
             'defender_goal': DefenderGoal(eviction=True),
             'maximum_total_credentials': 1,
@@ -190,6 +194,23 @@ register(
             },
     max_episode_steps=50,
 )
+
+
+# if 'CyberBattleTinyMicro-v123' in registry.env_specs:
+#     del registry.env_specs['CyberBattleTinyMicro-v123']
+
+# register(
+#     id='CyberBattleTinyMicro-v123',
+#     cyberbattle_env_identifiers=tinymicro_deception_ht123.ENV_IDENTIFIERS,
+#     entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroHT123',
+#     kwargs={'defender_agent': None,
+#             'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
+#             'defender_goal': DefenderGoal(eviction=True),
+#             'maximum_total_credentials': 1,
+#             'maximum_node_count': 10
+#             },
+#     max_episode_steps=50,
+# )
 
 
 if 'CyberBattleTinyMicro-v1234' in registry.env_specs:

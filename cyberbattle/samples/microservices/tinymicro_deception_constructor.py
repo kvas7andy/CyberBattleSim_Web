@@ -25,10 +25,11 @@ def reconfigure_environment(ht_on: dict) -> None:
         [] +
         [("State=1", VulnerabilityInfo(  # HT3 state
             description="Deceptive honeytoken with detection point; Honeytoken tampering (honeycookie)",
-            # TODO: illegal from code perspective to use NOT with property => find soliution in cyberbattle_env._check_properties_after_profile_check prerequisuits &~script_block
+            # TODO: illegal from code perspective to use NOT with property => find soliution
+            #   in cyberbattle_env._check_properties_after_profile_check prerequisuits, in order to implement [...&~script_block
             type=VulnerabilityType.REMOTE,
             precondition=m.Precondition("~username.NoAuth&state"),  # ~script_block
-            outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(cost=10, detection_point_name="HT3_state"),
+            outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="HT3_state"),  # revert: cost=10
             reward_string="Honeytoken tampering: changing state value in cookies leads to no change",
         ))] * ht_on["HT3_state"] +
         [("V2toV1", VulnerabilityInfo(  # HT1 v2tov1
@@ -99,8 +100,8 @@ def reconfigure_environment(ht_on: dict) -> None:
                     outcome=[m.ExploitFailed()] * 2 + ht_on["HT4_cloudactivedefense"] * [m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="HT4_cloudactivedefense")] +  # HT4 cloudactive defense
                             [m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="DP_git")] +
                             [m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="DP_robots")],
-                    reward_string=["Forced browsing attempts"] * 4 +
-                    ["Forced browsing attempts (honey HTTP header paremeter - detection point triggered)"],
+                    reward_string=["Forced browsing attempts"] * 2 +
+                    ["Forced browsing attempts (honey HTTP header paremeter - detection point triggered)"] + ["Forced browsing attempts"] * 2,
                     cost=1.0
                 ))
             ])
@@ -131,7 +132,7 @@ def reconfigure_environment(ht_on: dict) -> None:
                     description="Probe admin/admin",
                     precondition=m.Precondition("username.NoAuth&username_password_restrictions"),
                     type=VulnerabilityType.REMOTE,
-                    outcome=m.concatenate_outcomes((m.ProbeFailed, m.DetectionPoint))(detection_point_name="DP_admin"),
+                    outcome=m.concatenate_outcomes((m.ExploitFailed, m.DetectionPoint))(detection_point_name="DP_admin"),  # revert: ProbeFailed
                     reward_string="invliad credentials admin/admin",
                     cost=1.0
                 )),
@@ -151,7 +152,7 @@ def reconfigure_environment(ht_on: dict) -> None:
             value=0,
             vulnerabilities=OrderedDict([
                 ("", VulnerabilityInfo(
-                    description="egister patient and check cokies from authorisation",
+                    description="Register patient and check cokies from authorisation",
                     precondition=m.Precondition("username.NoAuth"),
                     type=VulnerabilityType.REMOTE,
                     outcome=m.concatenate_outcomes((m.LeakedProfiles, m.ProbeSucceeded, m.LeakedNodesId))(

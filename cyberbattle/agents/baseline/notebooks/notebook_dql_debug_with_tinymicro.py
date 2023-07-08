@@ -109,7 +109,7 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
     os.environ["GYMID"] = str(gymid)
     os.environ['SEED'] = str(seed)
     os.environ['GAMMA'] = str(gamma)
-    os.environ['REWARD_CLIP'] = str(log_results).lower()
+    os.environ['REWARD_CLIP'] = str(reward_clip).lower()
 
     log_dir = '/logs/exper/' + "notebook_dql_debug_with_tinymicro"
     if run_random_agent:
@@ -118,7 +118,7 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
         log_dir = os.path.join(log_dir, 'qtabular')
     # convert the datetime object to string of specific format
     datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_dir = os.path.join(log_dir, gymid, datetime_str)
+    log_dir = os.path.join(log_dir, gymid + os.getenv("LOG_NAME_OFFSET", ''), datetime_str)
     os.environ['LOG_DIR'] = log_dir
 
     os.makedirs(log_dir, exist_ok=True) if log_results else ''
@@ -179,7 +179,7 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
         agent = random_run['learner']
         n_episodes = len(random_run["all_episodes_rewards"])
     elif run_qtabular:
-        random_run = learner.epsilon_greedy_search(
+        qtabular_run = learner.epsilon_greedy_search(
             cyberbattle_gym_env=ctf_env,
             environment_properties=ep,
             learner=a.QTabularLearner(ep, gamma=gamma, learning_rate=0.90, exploit_percentile=100),
@@ -190,8 +190,8 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
             verbosity=Verbosity.Quiet,
             title="Tabular Q-learning"
         )
-        agent = random_run['learner']
-        n_episodes = len(random_run["all_episodes_rewards"])
+        agent = qtabular_run['learner']
+        n_episodes = len(qtabular_run["all_episodes_rewards"])
     else:
         dqn_learning_run = learner.epsilon_greedy_search(
             cyberbattle_gym_env=ctf_env,
