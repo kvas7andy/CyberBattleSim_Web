@@ -1,0 +1,5 @@
+# HSTS 1.0 Known Hosts database for GNU Wget.
+# Edit at your own risk.
+# <hostname>	<port>	<incl. subdomains>	<created>	<max-age>
+poppler.freedesktop.org	0	1	1686505290	15724800
+github.com	0	1	1688829847	31536000

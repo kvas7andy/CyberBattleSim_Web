@@ -93,9 +93,9 @@ fi
 
 
 # # Bash profile, manual code
-# if [ -f ~/.bash_profile ]; then
-#     . ~/.bash_profile
-# fi
+if [ -f ~/.bash_profile ]; then
+    . ~/.bash_profile
+fi
 
 # enable programmable completion features (you don't need to enable
 # this, if it's already enabled in /etc/bash.bashrc and /etc/profile
@@ -103,6 +103,3 @@ fi
 #if [ -f /etc/bash_completion ] && ! shopt -oq posix; then
 #    . /etc/bash_completion
 #fi
-
-### PYTHONPATH update to exclude including everywehre "import cyberbattle"
-export PYTHONPATH=$PYTHONPATH:/root

@@ -7,7 +7,7 @@
 [core]
     whitespace = cr-at-eol,-trailing-space
 [credential]
-	helper = "!f() { /root/.vscode-server/bin/695af097c7bd098fbf017ce3ac85e09bbc5dda06/node /tmp/vscode-remote-containers-8b5b579a-594c-463d-8095-62286f7dda9f.js git-credential-helper $*; }; f"
+	helper = "!f() { /root/.vscode-server/bin/695af097c7bd098fbf017ce3ac85e09bbc5dda06/node /tmp/vscode-remote-containers-d9da8e4a-0363-4e4b-8f3e-82f9c7512ca9.js git-credential-helper $*; }; f"
 [user]
 	email = andrei.kvasov.dl@gmail.com
 	name = Andrei Kvasov
@@ -20,3 +20,8 @@
 [remote "upstream"]
     url = https://github.com/microsoft/CyberBattleSim.git
     fetch = +refs/heads/*:refs/remotes/upstream/*
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
