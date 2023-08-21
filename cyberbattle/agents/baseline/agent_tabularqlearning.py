@@ -373,7 +373,7 @@ class QTabularLearner(learner.Learner):
                 self.qsource.update(qsource_state,
                                     source_node_encoding,
                                     qsource_state,
-                                    reward=0, gamma=self.gamma, learning_rate=self.learning_rate)
+                                    reward=0, gamma=selnf.gamma, learning_rate=self.learning_rate)
 
                 self.qattack.update(qattack_state,
                                     int(abstract_action),

@@ -109,6 +109,7 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
     os.environ["GYMID"] = str(gymid)
     os.environ['SEED'] = str(seed)
     os.environ['GAMMA'] = str(gamma)
+    os.environ['EPS_EXP_DECAY'] = str(epsilon_exponential_decay)
     os.environ['REWARD_CLIP'] = str(reward_clip).lower()
 
     log_dir = '/logs/exper/' + "notebook_dql_debug_with_tinymicro"

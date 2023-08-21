@@ -189,6 +189,7 @@ def evaluate_model(
     epsilon: float,
     eval_episode_count: int,
     best_eval_running_mean: float,
+    eval_freq: Optional[int] = 5,
     training_steps_done: int = 0,
     training_episode_done: int = 0,
     mean_reward_window: int = 10,
@@ -309,7 +310,7 @@ def evaluate_model(
 
         loss_string = learner.loss_as_string()
 
-        if configuration.log_results and (training_episode_done % 100 < 50):
+        if (not training_episode_done % (5 * eval_freq)) and configuration.log_results:
             for name, deception_tracker in observation['_deception_tracker'].items():
                 detection_points_results[name] = detection_points_results.get(name, [[], [0], []])
                 _, name_indptr, _ = detection_points_results[name]
@@ -341,7 +342,7 @@ def evaluate_model(
                 learner.save(save_model_filename.replace('.tar', f'_eval_steps{training_steps_done + steps_done}.tar'))
                 learner.save(save_model_filename.replace('.tar', '_eval_best.tar'))
 
-        if configuration.log_results and (training_episode_done % 100 < 50):
+        if (not training_episode_done % (5 * eval_freq)) and configuration.log_results:
             np.savez(os.path.join(configuration.log_dir, 'training',
                                   f'detection_points_results_eval_trainsteps{training_steps_done}.npz'),
                      **({name + '_indices': np.array(v[0]) for name, v in detection_points_results.items()} |
@@ -675,7 +676,7 @@ def epsilon_greedy_search(
             trained_learner_results = evaluate_model(cyberbattle_gym_env, environment_properties, learner, title, iteration_count, epsilon,
                                                      eval_episode_count, best_eval_running_mean, training_steps_done=steps_done, training_episode_done=i_episode,
                                                      render=True, mean_reward_window=mean_reward_window,
-                                                     render_last_episode_rewards_to=None,
+                                                     render_last_episode_rewards_to=None, eval_freq=eval_freq,
                                                      verbosity=Verbosity.Quiet, save_model_filename=save_model_filename)
             best_eval_running_mean = trained_learner_results['best_running_mean']
 

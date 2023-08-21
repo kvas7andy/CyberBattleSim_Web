@@ -11,8 +11,8 @@ from ._env.cyberbattle_env import AttackerGoal, DefenderGoal
 from .samples.chainpattern import chainpattern
 from .samples.toyctf import toy_ctf, tinytoy
 from .samples.microservices import tinymicro, tinymicro_deception_dp_only, tinymicro_deception_full, tinymicro_deception_constructor
-from .samples.microservices import tinymicro_deception_ht1, tinymicro_deception_ht2, tinymicro_deception_ht3, tinymicro_deception_ht4
-from .samples.microservices import tinymicro_deception_ht1234  # tinymicro_deception_ht12, tinymicro_deception_ht123,
+# from .samples.microservices import tinymicro_deception_ht1, tinymicro_deception_ht2, tinymicro_deception_ht3, tinymicro_deception_ht4
+# from .samples.microservices import tinymicro_deception_ht1234  # tinymicro_deception_ht12, tinymicro_deception_ht123,
 from .samples.active_directory import generate_ad
 from .simulation import generate_network, model
 from .simulation.config import configuration
@@ -42,21 +42,21 @@ def register(id: str, cyberbattle_env_identifiers: model.Identifiers, **kwargs):
     registry.env_specs[id] = spec
 
 
-if 'CyberBattleTinyMicro-v0' in registry.env_specs:
-    del registry.env_specs['CyberBattleTinyMicro-v0']
+# if 'CyberBattleTinyMicro-v0' in registry.env_specs:
+#     del registry.env_specs['CyberBattleTinyMicro-v0']
 
-register(
-    id='CyberBattleTinyMicro-v0',
-    cyberbattle_env_identifiers=tinymicro.ENV_IDENTIFIERS,
-    entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicro',
-    kwargs={'defender_agent': None,
-            'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
-            'defender_goal': DefenderGoal(eviction=True),
-            'maximum_total_credentials': 1,
-            'maximum_node_count': 10
-            },
-    max_episode_steps=50,
-)
+# register(
+#     id='CyberBattleTinyMicro-v0',
+#     cyberbattle_env_identifiers=tinymicro.ENV_IDENTIFIERS,
+#     entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicro',
+#     kwargs={'defender_agent': None,
+#             'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
+#             'defender_goal': DefenderGoal(eviction=True),
+#             'maximum_total_credentials': 1,
+#             'maximum_node_count': 10
+#             },
+#     max_episode_steps=50,
+# )
 
 if 'CyberBattleTinyMicro-v100' in registry.env_specs:
     del registry.env_specs['CyberBattleTinyMicro-v100']
@@ -91,21 +91,21 @@ register(
     max_episode_steps=50,
 )
 
-if 'CyberBattleTinyMicro-v1' in registry.env_specs:
-    del registry.env_specs['CyberBattleTinyMicro-v1']
+# if 'CyberBattleTinyMicro-v1' in registry.env_specs:
+#     del registry.env_specs['CyberBattleTinyMicro-v1']
 
-register(
-    id='CyberBattleTinyMicro-v1',
-    cyberbattle_env_identifiers=tinymicro_deception_ht1.ENV_IDENTIFIERS,
-    entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroHT1',
-    kwargs={'defender_agent': None,
-            'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
-            'defender_goal': DefenderGoal(eviction=True),
-            'maximum_total_credentials': 1,
-            'maximum_node_count': 10
-            },
-    max_episode_steps=50,
-)
+# register(
+#     id='CyberBattleTinyMicro-v1',
+#     cyberbattle_env_identifiers=tinymicro_deception_ht1.ENV_IDENTIFIERS,
+#     entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroHT1',
+#     kwargs={'defender_agent': None,
+#             'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
+#             'defender_goal': DefenderGoal(eviction=True),
+#             'maximum_total_credentials': 1,
+#             'maximum_node_count': 10
+#             },
+#     max_episode_steps=50,
+# )
 
 # if 'CyberBattleTinyMicro-v12' in registry.env_specs:
 #     del registry.env_specs['CyberBattleTinyMicro-v12']
@@ -123,11 +123,57 @@ register(
 #     max_episode_steps=50,
 # )
 
-
 max_ht_on = len(configuration.honeytokens_on)
+
+
+if 'CyberBattleTinyMicro-v0' in registry.env_specs:
+    del registry.env_specs['CyberBattleTinyMicro-v0']
+
+ht_on = dict(zip(list(sorted(configuration.honeytokens_on.keys())),
+                 [False for k in range(1, max_ht_on + 1)]))
+tinymicro_deception_constructor.reconfigure_environment(ht_on)
+
+register(
+    id='CyberBattleTinyMicro-v0',
+    cyberbattle_env_identifiers=tinymicro_deception_constructor.ENV_IDENTIFIERS,
+    entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroHT',
+    kwargs={'initial_environment': tinymicro_deception_constructor.new_environment(),
+            'defender_agent': None,
+            'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
+            'defender_goal': DefenderGoal(eviction=True),
+            'maximum_total_credentials': 1,
+            'maximum_node_count': 10
+            },
+    max_episode_steps=50,
+)
+
+# Inject 1 honeytoken
+for i in range(1, max_ht_on + 1):
+    ver = str(i)
+    if 'CyberBattleTinyMicro-v' + ver in registry.env_specs:
+        del registry.env_specs['CyberBattleTinyMicro-v' + ver]
+
+    ht_on = dict(zip(list(sorted(configuration.honeytokens_on.keys())),
+                     [True if k == i else False for k in range(1, max_ht_on + 1)]))
+    tinymicro_deception_constructor.reconfigure_environment(ht_on)
+
+    register(
+        id='CyberBattleTinyMicro-v' + ver,
+        cyberbattle_env_identifiers=tinymicro_deception_constructor.ENV_IDENTIFIERS,
+        entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroHT',
+        kwargs={'initial_environment': tinymicro_deception_constructor.new_environment(),
+                'defender_agent': None,
+                'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
+                'defender_goal': DefenderGoal(eviction=True),
+                'maximum_total_credentials': 1,
+                'maximum_node_count': 10
+                },
+        max_episode_steps=50,
+    )
+
+# Inject 2 honeytokens
 for i in range(1, max_ht_on + 1):
     for j in range(i + 1, max_ht_on + 1):
-
         ver = str(i) + str(j)
         if 'CyberBattleTinyMicro-v' + ver in registry.env_specs:
             del registry.env_specs['CyberBattleTinyMicro-v' + ver]
@@ -150,8 +196,8 @@ for i in range(1, max_ht_on + 1):
             max_episode_steps=50,
         )
 
+# Inject 3 honeytokens
 for i in range(1, max_ht_on + 1):
-
     ver = ''.join([str(k) for k in range(1, max_ht_on + 1) if k != i])
     if 'CyberBattleTinyMicro-v' + ver in registry.env_specs:
         del registry.env_specs['CyberBattleTinyMicro-v' + ver]
@@ -174,15 +220,16 @@ for i in range(1, max_ht_on + 1):
         max_episode_steps=50,
     )
 
-if 'CyberBattleTinyMicro-v0' in registry.env_specs:
-    del registry.env_specs['CyberBattleTinyMicro-v0']
-4
+
+if 'CyberBattleTinyMicro-v1234' in registry.env_specs:
+    del registry.env_specs['CyberBattleTinyMicro-v1234']
+
 ht_on = dict(zip(list(sorted(configuration.honeytokens_on.keys())),
-                 [False for k in range(1, max_ht_on + 1)]))
+                 [True for k in range(1, max_ht_on + 1)]))
 tinymicro_deception_constructor.reconfigure_environment(ht_on)
 
 register(
-    id='CyberBattleTinyMicro-v0',
+    id='CyberBattleTinyMicro-v1234',
     cyberbattle_env_identifiers=tinymicro_deception_constructor.ENV_IDENTIFIERS,
     entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroHT',
     kwargs={'initial_environment': tinymicro_deception_constructor.new_environment(),
@@ -213,70 +260,53 @@ register(
 # )
 
 
-if 'CyberBattleTinyMicro-v1234' in registry.env_specs:
-    del registry.env_specs['CyberBattleTinyMicro-v1234']
+# if 'CyberBattleTinyMicro-v2' in registry.env_specs:
+#     del registry.env_specs['CyberBattleTinyMicro-v2']
 
-register(
-    id='CyberBattleTinyMicro-v1234',
-    cyberbattle_env_identifiers=tinymicro_deception_ht1234.ENV_IDENTIFIERS,
-    entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroHT1234',
-    kwargs={'defender_agent': None,
-            'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
-            'defender_goal': DefenderGoal(eviction=True),
-            'maximum_total_credentials': 1,
-            'maximum_node_count': 10
-            },
-    max_episode_steps=50,
-)
+# register(
+#     id='CyberBattleTinyMicro-v2',
+#     cyberbattle_env_identifiers=tinymicro_deception_ht2.ENV_IDENTIFIERS,
+#     entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroHT2',
+#     kwargs={'defender_agent': None,
+#             'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
+#             'defender_goal': DefenderGoal(eviction=True),
+#             'maximum_total_credentials': 1,
+#             'maximum_node_count': 10
+#             },
+#     max_episode_steps=50,
+# )
 
+# if 'CyberBattleTinyMicro-v3' in registry.env_specs:
+#     del registry.env_specs['CyberBattleTinyMicro-v3']
 
-if 'CyberBattleTinyMicro-v2' in registry.env_specs:
-    del registry.env_specs['CyberBattleTinyMicro-v2']
+# register(
+#     id='CyberBattleTinyMicro-v3',
+#     cyberbattle_env_identifiers=tinymicro_deception_ht3.ENV_IDENTIFIERS,
+#     entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroHT3',
+#     kwargs={'defender_agent': None,
+#             'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
+#             'defender_goal': DefenderGoal(eviction=True),
+#             'maximum_total_credentials': 1,
+#             'maximum_node_count': 10
+#             },
+#     max_episode_steps=50,
+# )
 
-register(
-    id='CyberBattleTinyMicro-v2',
-    cyberbattle_env_identifiers=tinymicro_deception_ht2.ENV_IDENTIFIERS,
-    entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroHT2',
-    kwargs={'defender_agent': None,
-            'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
-            'defender_goal': DefenderGoal(eviction=True),
-            'maximum_total_credentials': 1,
-            'maximum_node_count': 10
-            },
-    max_episode_steps=50,
-)
+# if 'CyberBattleTinyMicro-v4' in registry.env_specs:
+#     del registry.env_specs['CyberBattleTinyMicro-v4']
 
-if 'CyberBattleTinyMicro-v3' in registry.env_specs:
-    del registry.env_specs['CyberBattleTinyMicro-v3']
-
-register(
-    id='CyberBattleTinyMicro-v3',
-    cyberbattle_env_identifiers=tinymicro_deception_ht3.ENV_IDENTIFIERS,
-    entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroHT3',
-    kwargs={'defender_agent': None,
-            'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
-            'defender_goal': DefenderGoal(eviction=True),
-            'maximum_total_credentials': 1,
-            'maximum_node_count': 10
-            },
-    max_episode_steps=50,
-)
-
-if 'CyberBattleTinyMicro-v4' in registry.env_specs:
-    del registry.env_specs['CyberBattleTinyMicro-v4']
-
-register(
-    id='CyberBattleTinyMicro-v4',
-    cyberbattle_env_identifiers=tinymicro_deception_ht4.ENV_IDENTIFIERS,
-    entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroHT4',
-    kwargs={'defender_agent': None,
-            'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
-            'defender_goal': DefenderGoal(eviction=True),
-            'maximum_total_credentials': 1,
-            'maximum_node_count': 10
-            },
-    max_episode_steps=50,
-)
+# register(
+#     id='CyberBattleTinyMicro-v4',
+#     cyberbattle_env_identifiers=tinymicro_deception_ht4.ENV_IDENTIFIERS,
+#     entry_point='cyberbattle._env.cyberbattle_tinymicro:CyberBattleTinyMicroHT4',
+#     kwargs={'defender_agent': None,
+#             'attacker_goal': AttackerGoal(ctf_flag=True, own_atleast=1, own_atleast_percent=0.0),
+#             'defender_goal': DefenderGoal(eviction=True),
+#             'maximum_total_credentials': 1,
+#             'maximum_node_count': 10
+#             },
+#     max_episode_steps=50,
+# )
 
 
 ####################### Network layer configurations  ########################

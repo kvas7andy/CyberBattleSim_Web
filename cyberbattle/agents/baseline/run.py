@@ -67,6 +67,12 @@ parser.add_argument('--chain_size', default=4, type=int,
 parser.add_argument('--gymid', default='CyberBattleTinyMicro-v100', type=str,
                     help='Gym environment name to run in a simulator')
 
+parser.add_argument('--checkpoint_name', default='best', type=str,
+                    help='checkpoint name, either date or manual or best')
+
+parser.add_argument('--checkpoint_date', default='', type=str,
+                    help='checkpoint date in form %Y%m%d_%H%M%S')
+
 parser.add_argument('--eps_exp_decay', default=2000, type=int,
                     help='Relative number of episodes to pass, after which epsilon_minimum reached')
 
@@ -89,72 +95,73 @@ parser.set_defaults(run_qtabular=False)
 
 args = parser.parse_args()
 
-if args.train:
-    training_module.main(args=args)
-elif args.eval:
+if args.eval:
     evaluation_module.main(args=args)
 else:
-    logging.basicConfig(stream=sys.stdout, level=logging.ERROR, format="%(levelname)s: %(message)s")
+    if args.train:
+        training_module.main(args=args)
+    else:
+        logging.basicConfig(stream=sys.stdout, level=logging.ERROR, format="%(levelname)s: %(message)s")
 
-    print(f"torch cuda available={torch.cuda.is_available()}")
+        print(f"torch cuda available={torch.cuda.is_available()}")
 
-    cyberbattlechain = gym.make('CyberBattleChain-v0',
-                                size=args.chain_size,
-                                attacker_goal=cyberbattle_env.AttackerGoal(
-                                    own_atleast_percent=args.ownership_goal,
-                                    reward=args.reward_goal))
+        cyberbattlechain = gym.make('CyberBattleChain-v0',
+                                    size=args.chain_size,
+                                    attacker_goal=cyberbattle_env.AttackerGoal(
+                                        own_atleast_percent=args.ownership_goal,
+                                        reward=args.reward_goal))
 
-    ep = w.EnvironmentBounds.of_identifiers(
-        maximum_total_credentials=22,
-        maximum_node_count=22,
-        identifiers=cyberbattlechain.identifiers
-    )
-
-    all_runs = []
-
-    # Run Deep Q-learning
-    dqn_learning_run = learner.epsilon_greedy_search(
-        cyberbattle_gym_env=cyberbattlechain,
-        environment_properties=ep,
-        learner=dqla.DeepQLearnerPolicy(
-            ep=ep,
-            gamma=0.015,
-            replay_memory_size=10000,
-            target_update=10,
-            batch_size=512,
-            learning_rate=0.01),  # torch default is 1e-2
-        episode_count=args.training_episode_count,
-        iteration_count=args.iteration_count,
-        epsilon=0.90,
-        render=True,
-        # epsilon_multdecay=0.75,  # 0.999,
-        epsilon_exponential_decay=5000,  # 10000
-        epsilon_minimum=0.10,
-        verbosity=Verbosity.Quiet,
-        title="DQL"
-    )
-
-    all_runs.append(dqn_learning_run)
-
-    if args.run_random_agent:
-        random_run = learner.epsilon_greedy_search(
-            cyberbattlechain,
-            ep,
-            learner=learner.RandomPolicy(),
-            episode_count=args.eval_episode_count,
-            iteration_count=args.iteration_count,
-            epsilon=1.0,  # purely random
-            render=False,
-            verbosity=Verbosity.Quiet,
-            title="Random search"
+        ep = w.EnvironmentBounds.of_identifiers(
+            maximum_total_credentials=22,
+            maximum_node_count=22,
+            identifiers=cyberbattlechain.identifiers
         )
-        all_runs.append(random_run)
 
-    colors = [asciichartpy.red, asciichartpy.green, asciichartpy.yellow, asciichartpy.blue]
+        all_runs = []
 
-    print("Episode duration -- DQN=Red, Random=Green")
-    print(asciichartpy.plot(p.episodes_lengths_for_all_runs(all_runs), {'height': 30, 'colors': colors}))
+        # Run Deep Q-learning
+        dqn_learning_run = learner.epsilon_greedy_search(
+            cyberbattle_gym_env=cyberbattlechain,
+            environment_properties=ep,
+            learner=dqla.DeepQLearnerPolicy(
+                ep=ep,
+                gamma=0.015,
+                replay_memory_size=10000,
+                target_update=10,
+                batch_size=512,
+                learning_rate=0.01),  # torch default is 1e-2
+            episode_count=args.training_episode_count,
+            iteration_count=args.iteration_count,
+            epsilon=0.90,
+            render=True,
+            # epsilon_multdecay=0.75,  # 0.999,
+            epsilon_exponential_decay=5000,  # 10000
+            epsilon_minimum=0.10,
+            verbosity=Verbosity.Quiet,
+            title="DQL"
+        )
 
-    print("Cumulative rewards -- DQN=Red, Random=Green")
-    c = p.averaged_cummulative_rewards(all_runs, args.rewardplot_width)
-    print(asciichartpy.plot(c, {'height': 10, 'colors': colors}))
+        all_runs.append(dqn_learning_run)
+
+        if args.run_random_agent:
+            random_run = learner.epsilon_greedy_search(
+                cyberbattlechain,
+                ep,
+                learner=learner.RandomPolicy(),
+                episode_count=args.eval_episode_count,
+                iteration_count=args.iteration_count,
+                epsilon=1.0,  # purely random
+                render=False,
+                verbosity=Verbosity.Quiet,
+                title="Random search"
+            )
+            all_runs.append(random_run)
+
+        colors = [asciichartpy.red, asciichartpy.green, asciichartpy.yellow, asciichartpy.blue]
+
+        print("Episode duration -- DQN=Red, Random=Green")
+        print(asciichartpy.plot(p.episodes_lengths_for_all_runs(all_runs), {'height': 30, 'colors': colors}))
+
+        print("Cumulative rewards -- DQN=Red, Random=Green")
+        c = p.averaged_cummulative_rewards(all_runs, args.rewardplot_width)
+        print(asciichartpy.plot(c, {'height': 10, 'colors': colors}))

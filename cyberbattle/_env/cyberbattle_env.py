@@ -1405,41 +1405,61 @@ class CyberBattleEnv(gym.Env):
         self.obs = observation
         return observation
 
-    def render_as_fig(self, csv_filename=None):
+    def render_as_fig(self, csv_filename=None, mode=['with_rewards']):
         debug = commandcontrol.EnvironmentDebugging(self._actuator)
-        self._actuator.print_all_attacks(filename=csv_filename)
+        self._actuator.print_all_attacks(filename=csv_filename if 'no_text' not in mode else None)
 
         # plot the cumulative reward and network side by side using plotly
-        fig = make_subplots(rows=1, cols=2)
-        fig.add_trace(go.Scatter(y=numpy.array(self.__episode_rewards).cumsum(),
-                                 name='cumulative reward'), row=1, col=1)
-        traces, layout = debug.network_as_plotly_traces(xref="x2", yref="y2")
+        fig = make_subplots(rows=1, cols=1 + 1 * ('with_rewards' in mode))
+        if 'with_rewards' in mode:
+            fig.add_trace(go.Scatter(y=numpy.array(self.__episode_rewards).cumsum(),
+                                     name='cumulative reward'), row=1, col=1)
+        traces, layout = debug.network_as_plotly_traces(xref="x" + str(1 + 1 * ('with_rewards' in mode)),
+                                                        yref="y" + str(1 + 1 * ('with_rewards' in mode)))
         for t in traces:
-            fig.add_trace(t, row=1, col=2)
-        fig.update_layout(layout)
+            fig.add_trace(t, row=1, col=1 + 1 * ('with_rewards' in mode))
+            fig.update_layout(layout, template='plotly_white', xaxis_range=[0, None])
+            fig.update_layout(**{
+                'xaxis' + '2' * ('with_rewards' in mode): dict(
+                    tickmode='linear',
+                    showgrid=False, zeroline=False,
+                    showticklabels=False
+                ),
+                'yaxis' + '2' * ('with_rewards' in mode): dict(
+                    showgrid=False, zeroline=False,
+                    showticklabels=False)}
+            )
         return fig
 
-    def render(self, mode: str = 'human', filename=None) -> None:
+    def render(self, mode: List[str] = ['human'], filename=None, image_hw=None) -> None:
+        if isinstance(mode, str):
+            mode = [mode]
         csv_filename = filename
         if csv_filename and '.csv' not in csv_filename:
             csv_filename = '.'.join(filename.split('.')[:-1] + ['csv'])
-        fig = self.render_as_fig(csv_filename=csv_filename if mode not in ['no_text'] else None)
+        fig = self.render_as_fig(csv_filename=csv_filename, mode=mode)
         # # requires,  pip install -U kaleido
-        # fig.update_layout(
-        #     xaxis=dict(
-        #         tickmode='linear',
-        #         # tick0 = 0.5,
-        #         dtick=1  # 0.75
-        #     ),
-        #     yaxis=dict(
-        #         tickmode='linear',
-        #         # tick0 = 0.5,
-        #         dtick=1  # 0.75
-        #     )
-        # )
+        h, w = image_hw if image_hw else (None, None)
+        fig.update_layout(
+            xaxis=dict(
+                tickmode='linear',
+                # tick0 = 0.5,
+                showgrid=False,
+                dtick=1  # 0.75
+            ),
+            yaxis=dict(
+                # tickmode='linear',
+                # tick0 = 0.5,
+                showgrid=False,
+                # dtick=1  # 0.75
+            ),
+            font=dict(size=15),
+            width=w,
+            height=h
+        )
         if filename:
             fig.write_image(filename)
-        if mode == 'human':
+        if 'human' in mode:
             fig.show(renderer=self.__renderer)
 
     def seed(self, seed: Optional[int] = None) -> None:

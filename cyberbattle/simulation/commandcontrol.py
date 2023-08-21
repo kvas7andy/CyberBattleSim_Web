@@ -241,12 +241,14 @@ class EnvironmentDebugging:
                         ),
             text=[i for i, c in owned_nodes_coordinates],
             hoverinfo='text',
-            textposition="bottom center"
+            textposition="bottom left"
         )
 
         trace_discovered_nodes = go.Scatter(
-            x=[c[0] for i, c in discovered_nodes_coordinates],
-            y=[c[1] for i, c in discovered_nodes_coordinates],
+            x=[c[0] for i, c in discovered_nodes_coordinates
+               if i not in ["GET_/v2", "GET_/v2/login", "POST_/v2/login"]],
+            y=[c[1] for i, c in discovered_nodes_coordinates
+               if i not in ["GET_/v2", "GET_/v2/login", "POST_/v2/login"]],
             mode='markers+text',
             name='discovered',
             marker=dict(symbol='circle-dot',
@@ -254,9 +256,29 @@ class EnvironmentDebugging:
                         color='#0e9d00',  # green
                         line=dict(color='rgb(0,255,0)', width=8)
                         ),
-            text=[i for i, c in discovered_nodes_coordinates],
+            text=[i for i, c in discovered_nodes_coordinates
+                  if i not in ["GET_/v2", "GET_/v2/login", "POST_/v2/login"]],
             hoverinfo='text',
-            textposition="bottom center"
+            textposition="bottom left"
+        )
+
+        right_trace_discovered_nodes = go.Scatter(
+            x=[c[0] for i, c in discovered_nodes_coordinates
+               if i in ["GET_/v2", "GET_/v2/login", "POST_/v2/login"]],
+            y=[c[1] for i, c in discovered_nodes_coordinates
+               if i in ["GET_/v2", "GET_/v2/login", "POST_/v2/login"]],
+            mode='markers+text',
+            name='discovered',
+            showlegend=False,
+            marker=dict(symbol='circle-dot',
+                        size=5,
+                        color='#0e9d00',  # green
+                        line=dict(color='rgb(0,255,0)', width=8)
+                        ),
+            text=[i for i, c in discovered_nodes_coordinates
+                  if i in ["GET_/v2", "GET_/v2/login", "POST_/v2/login"]],
+            hoverinfo='text',
+            textposition="bottom right"
         )
 
         dummy_scatter_for_edge_legend = [
@@ -266,7 +288,7 @@ class EnvironmentDebugging:
                 name=a.name
             ) for a in actions.EdgeAnnotation]
 
-        all_scatters = dummy_scatter_for_edge_legend + [trace_owned_nodes, trace_discovered_nodes]
+        all_scatters = dummy_scatter_for_edge_legend + [trace_owned_nodes, trace_discovered_nodes, right_trace_discovered_nodes]
         return (all_scatters, layout)
 
     def plot_discovered_network(self) -> None:

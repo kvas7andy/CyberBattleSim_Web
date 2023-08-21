@@ -64,38 +64,43 @@ training_episode_count = None
 train_while_exploit = False
 reward_clip = os.getenv("REWARD_CLIP", 'False').lower() in ('true', '1', 't')
 
-log_dir = '/logs/exper/' + "notebook_debug_tinymicro"
-# convert the datetime object to string of specific format
-log_level = os.getenv('LOG_LEVEL', "info")
-checkpoint_name = 'manual' if os.getenv('CHECKPOINT', 'manual').lower() in ('manual') else os.environ['CHECKPOINT'].lower()
-iteration_count = None
-checkpoint_date = None
-
-# # %%
-iteration_count = max_episode_steps if iteration_count is None else iteration_count
-os.environ['TRAINING_EPISODE_COUNT'] = os.getenv('TRAINING_EPISODE_COUNT', 3000) if training_episode_count is None else str(training_episode_count)
-training_episode_count = int(os.environ['TRAINING_EPISODE_COUNT'])
-
-checkpoint_date = checkpoint_date if checkpoint_date else os.getenv('CHECKPOINT_DATE', '20230124_085534')
-datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-checkpoint_dir = os.path.join("/logs/exper/" + "notebook_dql_debug_with_tinymicro", gymid, checkpoint_date)
-assert checkpoint_name in ('best', 'manual') or checkpoint_name.isnumeric(), f"Checkpoint name {checkpoint_name} is not manual, best or stepsdone number"
-
-log_dir = os.path.join(log_dir, gymid, checkpoint_name) if checkpoint_name == 'manual' else \
-    os.path.join(log_dir, gymid, checkpoint_date, checkpoint_name)
-os.environ['LOG_DIR'] = log_dir
-os.environ['LOG_RESULTS'] = str(log_results).lower()
-exploit_train = "exploittrain" * train_while_exploit + "exploitinfer" * (1 - train_while_exploit)
-
 
 def main(gymid=gymid, training_episode_count=training_episode_count,
          iteration_count=iteration_count, args=None):
+    checkpoint_name = os.getenv('CHECKPOINT', 'manual').lower()
+    checkpoint_date = None
     if args is not None:
         training_episode_count = args.training_episode_count
         iteration_count = args.iteration_count
         gymid = args.gymid
+        checkpoint_name = args.checkpoint_name
+        checkpoint_date = args.checkpoint_date
 
-    os.makedirs(log_dir, exist_ok=True) if log_results else ''
+    # checkpoint_name = 'manual' if checkpoint_name in ('manual') else os.environ['CHECKPOINT'].lower()
+    iteration_count = None
+    # checkpoint_date = None
+
+    log_dir = '/logs/exper/' + "notebook_debug_tinymicro"
+    # convert the datetime object to string of specific format
+    log_level = os.getenv('LOG_LEVEL', "info")
+
+    # # %%
+    iteration_count = max_episode_steps if iteration_count is None else iteration_count
+    os.environ['TRAINING_EPISODE_COUNT'] = os.getenv('TRAINING_EPISODE_COUNT', 3000) if training_episode_count is None else str(training_episode_count)
+    training_episode_count = int(os.environ['TRAINING_EPISODE_COUNT'])
+
+    checkpoint_date = checkpoint_date if checkpoint_date else os.getenv('CHECKPOINT_DATE', '20230124_085534')
+    datetime_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    checkpoint_dir = os.path.join("/logs/exper/" + "notebook_dql_debug_with_tinymicro", gymid, checkpoint_date)
+    assert checkpoint_name in ('best', 'manual') or checkpoint_name.isnumeric(), f"Checkpoint name {checkpoint_name} is not manual, best or stepsdone number"
+
+    log_dir = os.path.join(log_dir, gymid, checkpoint_name) if checkpoint_name == 'manual' else \
+        os.path.join(log_dir, gymid, checkpoint_date, checkpoint_name)
+    os.environ['LOG_DIR'] = log_dir
+    os.environ['LOG_RESULTS'] = str(log_results).lower()
+    exploit_train = "exploittrain" * train_while_exploit + "exploitinfer" * (1 - train_while_exploit)
+
+    # os.makedirs(log_dir, exist_ok=True) if log_results else ''
     configuration.update_globals(log_dir, gymid, log_level, log_results)
     configuration.update_logger()
 
@@ -190,12 +195,15 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
         dql_agent.train_while_exploit = False
         dql_agent.policy_net.eval()
 
+    if log_results:
+        os.makedirs(log_dir, exist_ok=True)
+
     # # %%
     h = []
     done = False
     total_reward = 0
     for i in range(max(iteration_count, len(manual_commands))):
-        wrapped_env.render(mode='rgb_array', filename=None if not log_results else
+        wrapped_env.render(mode=['with_rewards', 'rgb_array'], filename=None if not log_results else
                            os.path.join(log_dir, f'{exploit_train}_{train_while_exploit*"ExploitUdpates"}_s{i}_chkpt{checkpoint_name}_network.png'))
         logger.info("")
         if done:
@@ -221,14 +229,17 @@ def main(gymid=gymid, training_episode_count=training_episode_count,
         display(df)
 
     if log_results:
-        os.makedirs(log_dir, exist_ok=True)
         df.to_csv(os.path.join(log_dir, f'{exploit_train}_{train_while_exploit*"ExploitUdpates"}_s{i}_chkpt{checkpoint_name}_action.csv'))  # ,
         # index=False)
     print(f'len: {len(h)}, cumulative reward: {total_reward}')
 
     # # %%
-    wrapped_env.render(mode='rgb_array' if not log_results else 'human', filename=None if not log_results else
-                       os.path.join(log_dir, f'{exploit_train}_{train_while_exploit*"ExploitUdpates"}_chkpt{checkpoint_name}_network.png'))
+    img_formats = ['png', 'eps']
+    for img_format in img_formats:
+        wrapped_env.render(mode='rgb_array', image_hw=(500, 800), filename=None if not log_results else
+                           os.path.join(log_dir, f'{exploit_train}_{train_while_exploit*"ExploitUdpates"}_chkpt{checkpoint_name}_network.' + img_format))
+        if not log_results:
+            wrapped_env.render(mode='human', filename=None)
 
 
 # %%
