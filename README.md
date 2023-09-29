@@ -1,4 +1,4 @@
-# CyberBattleSim_WebApp
+# CyberBattleSim_Web
 Reinforcement learning simulation for testing web application vulnerabilities, and its defense capabilities, like deceptive elements. 
 
 _To be updated soon_ 
