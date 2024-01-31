@@ -7,12 +7,6 @@ Research project on the development of high-fidelity simulator for cloud active 
 
 Repository mainly consists of source files of the microservices simulator ([cyberbattle](cyberbattle)) and files running DQL training ([notebooks](cyberbattle/agents/baseline/notebooks/)).
 
-In progress:
-1. Honeytokens experiments
-2. Action mask usage by NN, ref. [update_action_mask()](cyberbattle/_env/cyberbattle_env.py#L747).
-3.  [stablebaselines](notebooks/stable-baselines-agent.py) A2C, PPO
-4. ...
-
 ## Installation
 
 ### Creating & running docker container
