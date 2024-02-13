@@ -34,7 +34,7 @@ From now on work only inside VSCODE, although it is still possible to connect to
 | Types of environments  | cyberbattle/samples/: [microservices/](cyberbattle/samples/microservices)        | Set of `tinymicro[...].py` files with web application configurations, including honeytokens ([[...]_ht1](cyberbattle/samples/microservices/tinymicro_deception_ht1.py), [[...]_ht2](cyberbattle/samples/microservices/tinymicro_deception_ht2.py), [[...]_ht123](cyberbattle/samples/microservices/tinymicro_deception_ht123.py), ..., [full](cyberbattle/samples/microservices/tinymicro_deception_full.py))      |
 
 
-### Running through command line (without papermill)w
+### Running commands in terminal
 
 Main file to use is `notebook_dql_debug_with_tinymicro.py` as:
 ```bash
@@ -43,8 +43,7 @@ python cyberbattle/agents/baseline/notebooks/notebook_dql_debug_with_tinymicro.p
 
 # changing parameters from default using argparse in run.py
 python cyberbattle/agents/baseline/run.py --gymid CyberBattleTinyMicro-v2 --reward_clip --eps_exp_decay 2000
-
-python cyberbattle/agents/baseline/run.py --train {--log_restuls --gymid CyberBattleTinyMicro-v2 --reward_clip --eps_exp_decay 2000
+python cyberbattle/agents/baseline/run.py --train --log_restuls --gymid CyberBattleTinyMicro-v2 --reward_clip --eps_exp_decay 2000
 
 ```
 
@@ -97,17 +96,17 @@ The output is stored in `/logs/exper/notebook_dql_debug_with_tinymicro/[gymid]/[
       - To fasten logging, optionally, limit writing of summary only on evaluation steps by setting `only_eval_summary` variable to True.
     - `.csv` outputs and `.png` files generated at the end of training for results on  10 evaluation episodes
 
-### Running through .sh experiments files (with papermill)
-Example of bash file for conducting experiments is `~/run_exper_ht_gradual_increase.sh` with the lines of form:
+### Running .sh experiments files (with papermill)
+[papermill](https://pypi.org/project/papermill/) generates output from '.py' file to Jupyter notebook, which includes run results.
+
+Example of bash file for conducting experiments is `~/run_exper_ht_gradual_increase.sh`, which creates pipeline, converting `.py` training file to jupyter notebook, changing parameters of the algorithm by adding new cell into `.ipynb` and running that code. Include available argparse variables with `-p` keyword.
 ```bash
 cat $INPUT_DIR/notebook_dql_debug_with_tinymicro.py | jupytext --to ipynb --set-kernel - | papermill $OUTPUT_DIR/notebook_dql_debug_tiny_ht_gradual_increase.ipynb -p gymid 'CyberBattleTinyMicro-v12' -p training_episode_count  2000  -p reward_clip $REWARD_CLIP # -p iteration_count 20 -p eval_episode_count 10
 ```
 
-which define the pipeline of converting `.py` training file to jupyternotebook, then using `papremill` which can change the parameters of the algorithm by adding new cell into `.ipynb`. Include any python variable defined inside `notebook_dql_debug_with_tinymicro.py` with `-p` keyword.
-
 The visual outputs better check generated `logfile.log` file as the cmd outputs do not include training progressbar.
 
-### Testing simulator with manual commands and learned agent
+### Testing learned agent in simulation
 
 To test the algorithm use either [notebook_debug_tinymicro.py](cyberbattle/agents/baseline/notebooks/notebook_debug_tinymicro.py) or [run.py](cyberbattle/agents/baseline/run.py) with `--eval --no-train`.
 
