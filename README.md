@@ -1,65 +1,17 @@
 # Web Application version of CyberBattleSim
 Authors: Kvasov Andrei, Sahin Merve, Hebert Cedric
 
+Research [paper](https://drive.google.com/file/d/1cOYfubTo-zPvtF4VJ4K7_d3P0Ntwmlpu/view?usp=drive_link) published on SECAI'23 ESORICS conference.
+
 Research project on the development of high-fidelity simulator for cloud active defense occured on the web application layer.
 
 ## Introduction
 
 Repository mainly consists of source files of the microservices simulator ([cyberbattle](cyberbattle)) and files running DQL training ([notebooks](cyberbattle/agents/baseline/notebooks/)).
-
-## Installation
-
-### Creating & running docker container
-Modification of the original section [Recreating the Docker image](#recreating-the-docker-image) 
-
-#### Recreating the Docker image
-
-```bash
-docker build -t cyberbattle:1.1 .
-docker run -it -d -v {absolute_path_at_server}:/logs/exper --gpus all --rm cyberbattle:1.1 bash
-```
-This will run the container in detached mode, so you can connect to it via VSCODE later, and for saved experiments link folder `dir_for_log_at_server` to the container's internal `/logs/exper`.
-
-For installation of additional python modules (for example, pandas) update [requirements.txt](requirements.txt)
-
-Known issues:
-- **Do not update gym** without sync with `gymnasium` repository: recent repository [migration compatibility](https://gymnasium.farama.org/content/gym_compatibility/) with `gymnasium` should be handled with exceptional attention OR delegate the migration to original repository [microsoft/CyberBattleSim](https://github.com/microsoft/CyberBattleSim). Now it is upstream remote so you can easilty `git pull upstream main` to get updates.
-
-### VsCode
-
-To interact with container, run its python modules, bash scripts and jupyter notebooks, **use VSCODE** as your main instrument. Both original and current simualtor version have NO ability to forward any port from container to the host through server, thus it is **impossible** to connect to jupyter notebook server running inside container.
-
-For VSCODE install 2 necessary extensions: Remote SSH, Remote Explorer. _Optionally_ install Jupyter, GitLens extensions.
-
-#### Connecting and checking the container
-If there is no necessity in using ssh-key for login, pass 1.1 and 5.
-1. In Remote SSH, within SSH tab -> "gear" symbol,  configure `~/.ssh/config` file on the host with this fields:
-```bash
-Host NAME 
-    HostName IP_ADRESS
-    User USERNAME 
-    IdentityFile PATH_TO_PRIVATE_SSH_KEY 
-    ForwardAgent yes
-```
-1.1  With `ForwardAgent` and `Identityfile` ssh configuration will pass ssh keys shared with github (enterprise) account.
-2. Go to Remote Explorer tab -> choose Remote from the drop down box -> choose NAME to connect to as remote server -> Connect and open inside window or separately
-3. In any VSCODE window open Remote Explorer tab -> choose Containers -> Choose running container of cyberbattlesim ([creat and run docker section])(#running-docker-container)
-4. Go to Explorer tab -> open Folder "/root" OR open presaved workspace `exproot.code-workspace` which also includes `/logs/exper` directory to view the experiment results (more detailed further).
-5. Check Github push/pull within VSCODE, setup SSH key
-
-Firstly, while connected to server only.
- **To check that SSH forwarding from local computer is setup, run:**
-1) `echo "$SSH_AUTH_SOCK"` to see if the agent was forwarded
-2) `ssh-add -L` and check the lines include ssh-key credentials. 
-3) If there is "no identity found" output from 2), please try to include in `config` this:
-  ```bash
-  Host NAME
-    ...
-    LocalForward localhost:23750 /var/run/docker.sock 
-  ```
-Secondly, create & run docker container, connect to it & connect github account using ssh-key. Next step: try pull/push/fetch from remote github. If any issues occur, post additional actions here during troubleshooting.
-
-Use Source Control tab and make fetch/pull/push action within VSCODE. If you enounter issues you can always a) work in VSCODE with terminal; b) copy ssh-key inside .ssh of container; 
+Content:
+1. [Installation](#installation)
+2. [Running the simulator](#running-the-simulator)
+3. [Environments configurations](#environments-configurations)
 
 ## Running the simulator
 
@@ -68,7 +20,7 @@ From now on work only inside VSCODE, although it is still possible to connect to
 1. Open folder "/root"
 2. You can check if any files uncommited in Source Control, and try pull for updates
 3. Training files [section](#running-training-files)
-4. Testing agnets performance in simulator [section](#testing-simulator-with-manual-commands-and-learned-agent) 
+4. Testing agents performance in simulator [section](#testing-simulator-with-manual-commands-and-learned-agent) 
 
 ### Project structure
 
@@ -82,10 +34,7 @@ From now on work only inside VSCODE, although it is still possible to connect to
 | Types of environments  | cyberbattle/samples/: [microservices/](cyberbattle/samples/microservices)        | Set of `tinymicro[...].py` files with web application configurations, including honeytokens ([[...]_ht1](cyberbattle/samples/microservices/tinymicro_deception_ht1.py), [[...]_ht2](cyberbattle/samples/microservices/tinymicro_deception_ht2.py), [[...]_ht123](cyberbattle/samples/microservices/tinymicro_deception_ht123.py), ..., [full](cyberbattle/samples/microservices/tinymicro_deception_full.py))      |
 
 
-### Running training files
-
-Lets open terminal and start in `/root` folder, `~` 
-### Running through command line (wihtout papermill)
+### Running through command line (without papermill)w
 
 Main file to use is `notebook_dql_debug_with_tinymicro.py` as:
 ```bash
@@ -93,7 +42,10 @@ Main file to use is `notebook_dql_debug_with_tinymicro.py` as:
 python cyberbattle/agents/baseline/notebooks/notebook_dql_debug_with_tinymicro.py
 
 # changing parameters from default using argparse in run.py
-python cyberbattle/agents/baseline/run.py {--train} {--log_restuls} --gymid CyberBattleTinyMicro-v2 --reward_clip --eps_exp_decay 2000
+python cyberbattle/agents/baseline/run.py --gymid CyberBattleTinyMicro-v2 --reward_clip --eps_exp_decay 2000
+
+python cyberbattle/agents/baseline/run.py --train {--log_restuls --gymid CyberBattleTinyMicro-v2 --reward_clip --eps_exp_decay 2000
+
 ```
 
 For both commands the output will be decided depending on `log_results = True` flag wihtin .env `LOG_RESULTS` or `--log_results` as `run.py` parameters, although neither `--log_results` nor `--train` are necessary to be set (true by default). 
@@ -213,16 +165,66 @@ observation, reward, done, info = env .step(gym_action)
 
 ###  RL hyperparameters & DQN training
 
-1) Experiments with `reward_clip=[True|False]`, which feeds DQN with scaled to [-1, 1] rewards after processing all outcomes from action. **Result**: DQN is optimized actions faster, although diverge loss
+1) Experiments with `reward_clip=[True|False]`, which feeds DQN with scaled to [-1, 1] rewards after processing all outcomes from action. **Result**: DQN reaches optimal actions faster, although loss may increase after high reward at the end of the episode
 2) Experiments were made with `gamma=[0.015|0.1|0.25|0.7|0.9]`, when closer to 1, takes long-term influence of previous rewards, as discounted factor of cumulative rewards to learn onto. **Results**: weirdly, with increasing `gamma` from intial 0.015 value up to 0.25 learned becomes smoother in loss optimizer, but with 0.7 or 0.9 learning diverges, so that learning long-term relationship becomes harder and probably, because of the ctf flag capturing `winning_reward` is too large. **TODO:** test on `winning_reward == 0`, which basically is ok, because in this case we still want to end episode s earky as possible (because of repeats will penalize us).
 ![](docs/.attachments/reward_clip_gamma_results.png)
 
 <br />
 <br />
-<br />
-<br />
-<br />
-<br />
+
+## Installation
+
+### Creating & running docker container
+Modification of the original section [Recreating the Docker image](#recreating-the-docker-image) 
+
+#### Recreating the Docker image
+
+```bash
+docker build -t cyberbattle:1.1 .
+docker run -it -d -v {absolute_path_at_server}:/logs/exper --gpus all --rm cyberbattle:1.1 bash
+```
+This will run the container in detached mode, so you can connect to it via VSCODE later, and for saved experiments link folder `dir_for_log_at_server` to the container's internal `/logs/exper`.
+
+For installation of additional python modules (for example, pandas) update [requirements.txt](requirements.txt)
+
+Known issues:
+- **Do not update gym** without sync with `gymnasium` repository: recent repository [migration compatibility](https://gymnasium.farama.org/content/gym_compatibility/) with `gymnasium` should be handled with exceptional attention OR delegate the migration to original repository [microsoft/CyberBattleSim](https://github.com/microsoft/CyberBattleSim). Now it is upstream remote so you can easilty `git pull upstream main` to get updates.
+
+### VsCode
+
+To interact with container, run its python modules, bash scripts and jupyter notebooks, **use VSCODE** as your main instrument. Both original and current simualtor version have NO ability to forward any port from container to the host through server, thus it is **impossible** to connect to jupyter notebook server running inside container.
+
+For VSCODE install 2 necessary extensions: Remote SSH, Remote Explorer. _Optionally_ install Jupyter, GitLens extensions.
+
+#### Connecting and checking the container
+If there is no necessity in using ssh-key for login, pass 1.1 and 5.
+1. In Remote SSH, within SSH tab -> "gear" symbol,  configure `~/.ssh/config` file on the host with this fields:
+```bash
+Host NAME 
+    HostName IP_ADRESS
+    User USERNAME 
+    IdentityFile PATH_TO_PRIVATE_SSH_KEY 
+    ForwardAgent yes
+```
+1.1  With `ForwardAgent` and `Identityfile` ssh configuration will pass ssh keys shared with github (enterprise) account.
+2. Go to Remote Explorer tab -> choose Remote from the drop down box -> choose NAME to connect to as remote server -> Connect and open inside window or separately
+3. In any VSCODE window open Remote Explorer tab -> choose Containers -> Choose running container of cyberbattlesim ([creat and run docker section])(#running-docker-container)
+4. Go to Explorer tab -> open Folder "/root" OR open presaved workspace `exproot.code-workspace` which also includes `/logs/exper` directory to view the experiment results (more detailed further).
+5. Check Github push/pull within VSCODE, setup SSH key
+
+Firstly, while connected to server only.
+ **To check that SSH forwarding from local computer is setup, run:**
+1) `echo "$SSH_AUTH_SOCK"` to see if the agent was forwarded
+2) `ssh-add -L` and check the lines include ssh-key credentials. 
+3) If there is "no identity found" output from 2), please try to include in `config` this:
+  ```bash
+  Host NAME
+    ...
+    LocalForward localhost:23750 /var/run/docker.sock 
+  ```
+Secondly, create & run docker container, connect to it & connect github account using ssh-key. Next step: try pull/push/fetch from remote github. If any issues occur, post additional actions here during troubleshooting.
+
+Use Source Control tab and make fetch/pull/push action within VSCODE. If you enounter issues you can always a) work in VSCODE with terminal; b) copy ssh-key inside .ssh of container; 
 
 
 # Appendix
