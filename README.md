@@ -1,7 +1,7 @@
 # Web Application version of CyberBattleSim
 Authors: Kvasov Andrei, Sahin Merve, Hebert Cedric
 
-Research [paper]([https://drive.google.com/file/d/1cOYfubTo-zPvtF4VJ4K7_d3P0Ntwmlpu/view?usp=drive_link](https://www.springerprofessional.de/en/simulating-deception-for-web-applications-using-reinforcement-le/26842822)) published on SECAI'23 ESORICS conference.
+Research [paper](https://www.springerprofessional.de/en/simulating-deception-for-web-applications-using-reinforcement-le/26842822) published on SECAI'23 ESORICS conference.
 
 Research project on the development of high-fidelity simulator for cloud active defense occured on the web application layer.
 
